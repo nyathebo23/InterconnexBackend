@@ -1,0 +1,14 @@
+<!-- {% extends 'core/email_base.html' %} {% block main %} {% autoescape off %} -->
+<div class="gretting_text">
+    <span>Hi {{user.username }}, thanks for using Interconnex</span>
+</div>
+<br />
+<br />
+<div class="activate_account_main_text">
+    <span>This is your Sigup Verification Code</span>
+</div>
+<br />
+<div>
+    <h3>Code: <strong id="code">{{code}}</strong></h3>
+</div>
+<!-- {% endautoescape %} {%endblock main %} -->
