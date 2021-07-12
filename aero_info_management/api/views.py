@@ -18,30 +18,24 @@ aic_type = ContentType.objects.get_for_model(DemandeAIC)
 def listDDIA_inwaiting_for_nationalinformer_view(request, type_ddia):
     national_agent = NationalAgent.objects.select_related('nationalinformer').get(user=request.user)
     nationalinf = national_agent.nationalinformer
-    data = []
+    validations = []
     if type_ddia == 'notam':
-        notam_validations = Validation.objects.filter(
+        validations = Validation.objects.filter(
             # local_agent__localinformer__national_informer=nationalinf, 
             notam__state=PENDING_APPROVAL_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_validations] 
-        data = ValidationSerializer(notam_validations, many=True).data
     elif type_ddia == 'suppaip':
-        suppaip_validations = Validation.objects.filter(
+        validations = Validation.objects.filter(
             # local_agent__localinformer__national_informer=nationalinf, 
             suppaip__state=PENDING_APPROVAL_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_validations]
-        data = ValidationSerializer(suppaip_validations, many=True).data
     elif type_ddia == 'aic':
-        aic_validations = Validation.objects.filter(
+        validations = Validation.objects.filter(
             # local_agent__localinformer__national_informer=nationalinf, 
             aic__state=PENDING_APPROVAL_STATE)
-        # demandes_aic = [ elt.ddia_object for elt in aic_validations]
-        data = ValidationSerializer(aic_validations, many=True).data
     else:
         validations = Validation.objects.filter(
             Q(aic_state=PENDING_APPROVAL_STATE) |Q(notam_state=PENDING_APPROVAL_STATE) | Q(suppaip_state=PENDING_APPROVAL_STATE)
         )
-        data = ValidationSerializer(validations, many=True).data
+    data = ValidationSerializer(validations, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -49,29 +43,23 @@ def listDDIA_inwaiting_for_nationalinformer_view(request, type_ddia):
 def listDDIA_inwaiting_for_localinformer_view(request, type_ddia):
     local_agent = LocalAgent.objects.select_related('localinformer').get(user=request.user)
     localinf = local_agent.localinformer
+    actionsagent = []
     if type_ddia == 'notam':
-        notam_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             notam__unit__aerodrome__local_informer=localinf, notam__state=PENDING_VALIDATION_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_actionsagent] 
-        data = ActionAgentOnDDIASerializer(notam_actionsagent, many=True).data
     elif type_ddia == 'suppaip':
-        suppaip_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             suppaip__unit__aerodrome__local_informer=localinf, suppaip__state=PENDING_VALIDATION_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_actionsagent]
-        data = ActionAgentOnDDIASerializer(suppaip_actionsagent, many=True).data   
     elif type_ddia == 'aic':
-        aic_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             aic__unit__aerodrome__local_informer=localinf, aic__state=PENDING_VALIDATION_STATE)
-        # demandes_aic = [ elt.ddia_object for elt in aic_actionsagent]
-        data = ActionAgentOnDDIASerializer(aic_actionsagent, many=True).data
     else:
         actionsagent = ActionAgentOnDDIA.objects.filter(
            Q(notam__unit__aerodrome__local_informer=localinf, notam__state=PENDING_VALIDATION_STATE) 
          | Q(aic__unit__aerodrome__local_informer=localinf, aic__state=PENDING_VALIDATION_STATE) 
          | Q(suppaip__unit__aerodrome__local_informer=localinf, suppaip__state=PENDING_VALIDATION_STATE), 
         )       
-        data = ActionAgentOnDDIASerializer(actionsagent, many=True).data
-
+    data = ActionAgentOnDDIASerializer(actionsagent, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -79,29 +67,23 @@ def listDDIA_inwaiting_for_localinformer_view(request, type_ddia):
 def listDDIA_inwaiting_for_sourcestructure_view(request, type_ddia):
     agent = Agent.objects.select_related('source_structure').get(user = request.user)
     sourcestructure = agent.source_structure
+    actionsagent = []
     if type_ddia == 'notam':
-        notam_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             notam__unit__aerodrome=sourcestructure, notam__state=PENDING_ADMISSION_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_actionsagent] 
-        data = ActionAgentOnDDIASerializer(notam_actionsagent, many=True).data
     elif type_ddia == 'suppaip':
-        suppaip_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             suppaip__unit__aerodrome=sourcestructure, suppaip__state=PENDING_ADMISSION_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_actionsagent]
-        data = ActionAgentOnDDIASerializer(suppaip_actionsagent, many=True).data 
     elif type_ddia == 'aic':
-        aic_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             aic__unit__aerodrome=sourcestructure, aic__state=PENDING_ADMISSION_STATE)
-        # demandes_aic = [ elt.ddia_object for elt in aic_actionsagent]
-        data = ActionAgentOnDDIASerializer(aic_actionsagent, many=True).data
     else:
         actionsagent = ActionAgentOnDDIA.objects.filter(
            Q(notam__unit__aerodrome=sourcestructure, notam__state=PENDING_ADMISSION_STATE) 
          | Q(aic__unit__aerodrome=sourcestructure, aic__state=PENDING_ADMISSION_STATE) 
          | Q(suppaip__unit__aerodrome=sourcestructure, suppaip__state=PENDING_ADMISSION_STATE), 
         )
-        data = ActionAgentOnDDIASerializer(actionsagent, many=True).data
-
+    data = ActionAgentOnDDIASerializer(actionsagent, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -109,25 +91,23 @@ def listDDIA_inwaiting_for_sourcestructure_view(request, type_ddia):
 def listDDIA_inwaiting_for_sourceverifier_view(request, type_ddia):
     agent = Agent.objects.select_related('source_structure').get(user = request.user)
     sourcestructure = agent.source_structure
+    actionsagent = []
     if type_ddia == 'notam':
-        notam_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             notam__unit__aerodrome=sourcestructure, notam__state=PENDING_VERIFICATION_STATE)
-        data = ActionAgentOnDDIASerializer(notam_actionsagent, many=True).data
     elif type_ddia == 'suppaip':
-        suppaip_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             suppaip__unit__aerodrome=sourcestructure, suppaip__state=PENDING_VERIFICATION_STATE)
-        data = ActionAgentOnDDIASerializer(suppaip_actionsagent, many=True).data
     elif type_ddia == 'aic':
-        aic_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             aic__unit__aerodrome=sourcestructure, aic__state=PENDING_VERIFICATION_STATE)
-        data = ActionAgentOnDDIASerializer(aic_actionsagent, many=True).data
     else:
         actionsagent = ActionAgentOnDDIA.objects.filter(
            Q(notam__unit__aerodrome=sourcestructure, notam__state=PENDING_VERIFICATION_STATE) 
          | Q(aic__unit__aerodrome=sourcestructure, aic__state=PENDING_VERIFICATION_STATE) 
          | Q(suppaip__unit__aerodrome=sourcestructure, suppaip__state=PENDING_VERIFICATION_STATE), 
         )
-        data = ActionAgentOnDDIASerializer(actionsagent, many=True).data
+    data = ActionAgentOnDDIASerializer(actionsagent, many=True, context={'request': request}).data
 
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -140,26 +120,21 @@ def listDDIA_inwaiting_for_initiator_view(request):
 def listDDIA_processed_for_nationalinformer_view(request, type_ddia):
     national_agent = NationalAgent.objects.select_related('nationalinformer').get(user=request.user)
     nationalinf = national_agent.nationalinformer
+    approbations = []
     if type_ddia == 'notam':
-        notam_approbations = Approbation.objects.filter(
-            national_agent__nationalinformer=nationalinf, ddia_type=notam_type, prev_state=PENDING_APPROVAL_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_actionsagent] 
-        data = ApprobationSerializer(notam_approbations, many=True).data
+        approbations = Approbation.objects.filter(
+            national_agent__nationalinformer=nationalinf, ddia_type=notam_type)
     elif type_ddia == 'suppaip':
-        suppaip_approbations = Approbation.objects.filter(
-            national_agent__nationalinformer=nationalinf, ddia_type=suppaip_type, prev_state=PENDING_APPROVAL_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_actionsagent]
-        data = ApprobationSerializer(suppaip_approbations, many=True).data
+        approbations = Approbation.objects.filter(
+            national_agent__nationalinformer=nationalinf, ddia_type=suppaip_type)
     elif type_ddia == 'aic':
-        aic_approbations = Approbation.objects.filter(
-            national_agent__nationalinformer=nationalinf, ddia_type=aic_type, prev_state=PENDING_APPROVAL_STATE)
-        # demandes_aic = [elt.ddia_object for elt in aic_actionsagent]
-        data = ApprobationSerializer(aic_approbations, many=True).data
+        approbations = Approbation.objects.filter(
+            national_agent__nationalinformer=nationalinf, ddia_type=aic_type)
     else:
-        appobations = Approbation.objects.filter(
-            national_agent__nationalinformer=nationalinf, prev_state=PENDING_APPROVAL_STATE
+        approbations = Approbation.objects.filter(
+            national_agent__nationalinformer=nationalinf
         )
-        data = ApprobationSerializer(appobations, many=True).data
+    data = ApprobationSerializer(approbations, many=True, context={'request': request}).data
 
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -168,24 +143,21 @@ def listDDIA_processed_for_nationalinformer_view(request, type_ddia):
 def listDDIA_processed_for_localinformer_view(request, type_ddia):
     local_agent = LocalAgent.objects.select_related('localinformer').get(user=request.user)
     localinf = local_agent.localinformer
-    data = []
+    validations = []
     if type_ddia == 'notam':
-        notam_validations = Validation.objects.filter(
-            local_agent__localinformer=localinf, ddia_type=notam_type, prev_state=PENDING_VALIDATION_STATE)
-        data = ValidationSerializer(notam_validations, many=True).data
+        validations = Validation.objects.filter(
+            local_agent__localinformer=localinf, ddia_type=notam_type)
     elif type_ddia == 'suppaip':
-        suppaip_validations = Validation.objects.filter(
-            local_agent__localinformer=localinf, ddia_type=suppaip_type, prev_state=PENDING_VALIDATION_STATE)
-        data = ValidationSerializer(suppaip_validations, many=True).data 
+        validations = Validation.objects.filter(
+            local_agent__localinformer=localinf, ddia_type=suppaip_type)
     elif type_ddia == 'aic':
-        aic_validations = Validation.filter(
-            local_agent__localinformer=localinf, ddia_type=aic_type, prev_state=PENDING_VALIDATION_STATE)
-        data = ValidationSerializer(aic_validations, many=True).data
+        validations = Validation.filter(
+            local_agent__localinformer=localinf, ddia_type=aic_type)
     else:
         validations = Validation.objects.filter(
             local_agent__localinformer=localinf,  prev_state=PENDING_VALIDATION_STATE
         )
-        data = ValidationSerializer(validations).data
+    data = ValidationSerializer(validations, many=True, context={'request': request}).data
 
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -194,28 +166,22 @@ def listDDIA_processed_for_localinformer_view(request, type_ddia):
 def listDDIA_processed_for_sourcestructure_view(request, type_ddia):
     agent = Agent.objects.select_related('source_structure').get(user = request.user)
     sourcestructure = agent.source_structure
-    data = []
+    actionsagent = []
     if type_ddia == 'notam':
-        notam_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             notam__unit__aerodrome=sourcestructure, prev_state=PENDING_ADMISSION_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_actionsagent] 
-        data = ActionAgentOnDDIASerializer(notam_actionsagent, many=True).data
     elif type_ddia == 'suppaip':
-        suppaip_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             suppaip__unit__aerodrome=sourcestructure, prev_state=PENDING_ADMISSION_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_actionsagent]
-        data = ActionAgentOnDDIASerializer(suppaip_actionsagent, many=True).data  
     elif type_ddia == 'aic':
-        aic_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             aic__unit__aerodrome=sourcestructure, prev_state=PENDING_ADMISSION_STATE)
-        # demandes_aic = [elt.ddia_object for elt in aic_actionsagent]
-        data = ActionAgentOnDDIASerializer(aic_actionsagent, many=True).data
     else:
         actionsagent = ActionAgentOnDDIA.objects.filter(
             Q(notam__unit__aerodrome=sourcestructure) |  Q(aic__unit__aerodrome=sourcestructure) | Q(suppaip__unit__aerodrome=sourcestructure), 
             prev_state=PENDING_ADMISSION_STATE
         )
-        data = ActionAgentOnDDIASerializer(actionsagent, many=True).data
+    data = ActionAgentOnDDIASerializer(actionsagent, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -223,30 +189,22 @@ def listDDIA_processed_for_sourcestructure_view(request, type_ddia):
 def listDDIA_processed_for_sourceverifier_view(request, type_ddia):
     agent = Agent.objects.select_related('source_structure').get(user = request.user)
     sourcestructure = agent.source_structure
-    # data = []
+    actionsagent = []
     if type_ddia == 'notam':
-        notam_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             notam__unit__aerodrome=sourcestructure, prev_state=PENDING_VERIFICATION_STATE)
-        # demandes_notam = [elt.ddia_object for elt in notam_actionsagent] 
-        data = ActionAgentOnDDIASerializer(notam_actionsagent, many=True).data
-
     elif type_ddia == 'suppaip':
-        suppaip_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             suppaip__unit__aerodrome=sourcestructure, prev_state=PENDING_VERIFICATION_STATE)
-        # demandes_suppaip = [elt.ddia_object for elt in suppaip_actionsagent]
-        data = ActionAgentOnDDIASerializer(suppaip_actionsagent, many=True).data
     elif type_ddia == 'aic':
-        aic_actionsagent = ActionAgentOnDDIA.objects.filter(
+        actionsagent = ActionAgentOnDDIA.objects.filter(
             aic__unit__aerodrome=sourcestructure, prev_state=PENDING_VERIFICATION_STATE)
-        # demandes_aic = [elt.ddia_object for elt in aic_actionsagent]
-        data = ActionAgentOnDDIASerializer(aic_actionsagent, many=True).data
     else:
         actionsagent = ActionAgentOnDDIA.objects.filter(
             Q(notam__unit__aerodrome=sourcestructure) |  Q(aic__unit__aerodrome=sourcestructure) | Q(suppaip__unit__aerodrome=sourcestructure), 
             prev_state=PENDING_ADMISSION_STATE
         )
-        data = ActionAgentOnDDIASerializer(actionsagent, many=True).data
-
+    data = ActionAgentOnDDIASerializer(actionsagent, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
@@ -257,14 +215,17 @@ def listDDIA_processed_for_initiator_view(request, type_ddia):
     data = []
     if type_ddia == 'notam':
         demandes_notam = DemandeNOTAM.objects.filter(unit=ownunit)
-        data = DemandeNOTAMSerializer(demandes_notam, many=True).data
+        data = DemandeNOTAMSerializer(demandes_notam, many=True, context={'request': request}).data
     elif type_ddia == 'suppaip':
         demandes_suppaip = DemandeSUPP.objects.filter(unit=ownunit) 
-        data = DemandeSUPPSerializer(demandes_suppaip, many=True).data
+        data = DemandeSUPPSerializer(demandes_suppaip, many=True, context={'request': request}).data
     elif type_ddia == 'aic':
         demandes_aic = DemandeAIC.objects.filter(unit=ownunit)  
-        data = DemandeAICSerializer(demandes_aic, many=True).data
+        data = DemandeAICSerializer(demandes_aic, many=True, context={'request': request}).data
     return response.Response(data=data, status=status.HTTP_200_OK)
+
+
+
 
 
 class AgentViewSet(viewsets.ModelViewSet):

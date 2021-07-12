@@ -25,7 +25,6 @@ class RequestReferral(models.Model):
     id_object = models.PositiveBigIntegerField()
     ddia_object = GenericForeignKey('ddia_type', 'id_object')
     date_time = models.DateTimeField(default=datetime.now)
-
     class Meta:
         ordering = ['date_time']
 
@@ -80,20 +79,19 @@ class Agent(models.Model):
     source_structure = models.ForeignKey(Aerodrome, on_delete=models.DO_NOTHING, blank=True)
     def __str__(self) -> str:
         return self.user.username+ ' - '+ self.user.role
-    def get_completed_name(self):
-        return self.user.last_name + ' ' + self.user.first_name
 
 class LocalAgent(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     localinformer = models.ForeignKey(LocalInformer, on_delete=models.DO_NOTHING)
-    def get_completed_name(self):
-        return self.user.last_name + ' ' + self.user.first_name
+    def __str__(self) -> str:
+        return self.user.username+ ' - '+ self.user.role
 
 class NationalAgent(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     nationalinformer = models.ForeignKey(NationalInformer, on_delete=models.DO_NOTHING)
-    def get_completed_name(self):
-        return self.user.last_name + ' ' + self.user.first_name
+    def __str__(self) -> str:
+        return self.user.username+ ' - '+ self.user.role
+
 
 class DDIA(models.Model):
     initiator = models.ForeignKey(Agent, on_delete=models.DO_NOTHING)
@@ -165,7 +163,6 @@ class DemandeNOTAM(DDIA):
     agentactions = GenericRelation(ActionAgentOnDDIA, related_query_name='notam',  content_type_field='ddia_type')
     history = GenericRelation(DDIAHistory, related_query_name='notam', content_type_field='ddia_type', object_id_field='id_object')
 
-        
 
 class DemandeSUPP(DDIA):
     type_suppaip = models.CharField(max_length=15, choices=TYPES_SUPPAIP, default=SUPPAIPN)
@@ -174,7 +171,7 @@ class DemandeSUPP(DDIA):
     start_val_period = models.DateField()
     end_val_period = models.DateField()      
     descriptive_text = models.TextField(blank=True)
-    attachments = GenericRelation(Attachment, related_query_name='notam', content_type_field='ddia_type')
+    attachments = GenericRelation(Attachment, related_query_name='suppaip', content_type_field='ddia_type')
     approbations = GenericRelation(Approbation, related_query_name='suppaip', content_type_field='ddia_type')
     validations = GenericRelation(Validation, related_query_name='suppaip', content_type_field='ddia_type')
     agentactions = GenericRelation(ActionAgentOnDDIA, related_query_name='suppaip',  content_type_field='ddia_type')
@@ -182,10 +179,10 @@ class DemandeSUPP(DDIA):
 
 
 class DemandeAIC(DDIA):
-    subject = models.TextField()
+    subject = models.CharField(max_length=50, choices=AIC_SUBJECTS)
     object = models.TextField()
     descriptive_text = models.TextField(blank=True)
-    attachments = GenericRelation(Attachment, related_query_name='notam', content_type_field='ddia_type')
+    attachments = GenericRelation(Attachment, related_query_name='aic', content_type_field='ddia_type')
     approbations = GenericRelation(Approbation, related_query_name='aic', content_type_field='ddia_type')
     validations = GenericRelation(Validation, related_query_name='aic', content_type_field='ddia_type')
     agentactions = GenericRelation(ActionAgentOnDDIA, related_query_name='aic',  content_type_field='ddia_type')

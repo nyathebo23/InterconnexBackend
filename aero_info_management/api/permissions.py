@@ -54,6 +54,21 @@ class IsNationalInformer(permissions.BasePermission):
 
 class CanReadDDIA(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
+        user = request.user 
+        if user.role == SOURCE_AGENT:
+            agent = Agent.objects.select_related('unit').get(user=user)
+            return obj.unit == agent.unit
+        elif user.role == SOURCE_VERIFIER:
+            agent = Agent.objects.select_related('source_structure').get(user=user)
+            return agent.source_structure == obj.unit.aerodrome and obj.state != DRAFT_STATE
+        elif user.role == SOURCE_STRUCTURE:
+            agent = Agent.objects.select_related('source_structure').get(user=user)
+            return agent.source_structure == obj.unit.aerodrome and obj.state not in [DRAFT_STATE, PENDING_VERIFICATION_STATE]
+        elif user.role == LOCAL_INFORMER or user.role == LOCAL_VERIFIER:
+            agent = LocalAgent.objects.select_related('localinformer').get(user=user) 
+            return agent.localinformer == obj.unit.aerodrome.local_informer and obj.state not in [DRAFT_STATE, PENDING_VERIFICATION_STATE, PENDING_ADMISSION_STATE]
+        elif user.role == NATIONAL_INFORMER:
+            return  obj.state not in [DRAFT_STATE, PENDING_VERIFICATION_STATE, PENDING_ADMISSION_STATE]
         return super().has_object_permission(request, view, obj)
 
 class CanModifyDDIA(permissions.BasePermission):
