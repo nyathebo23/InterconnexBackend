@@ -16,8 +16,6 @@ class IsVerifier(permissions.BasePermission):
 
     def has_object_permission(self, request, view, obj):
         agent = Agent.objects.select_related('source_structure').get(user=request.user)
-        if agent is None:
-            return False
         return obj.unit.aerodrome == agent.source_structure and obj.state == PENDING_VERIFICATION_STATE
 
 class IsSourceAgent(permissions.BasePermission):
@@ -63,6 +61,9 @@ class CanModifyDDIA(permissions.BasePermission):
         return super().has_object_permission(request, view, obj)
 
 class IsOwner(permissions.BasePermission):
+    def has_permission(self, request, view):
+        user_role = request.user.role
+        return user_role == SOURCE_VERIFIER or user_role == SOURCE_AGENT
     def has_object_permission(self, request, view, obj):
         return request.user == obj.initiator.user
 

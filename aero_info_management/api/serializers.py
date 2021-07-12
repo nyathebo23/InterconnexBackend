@@ -3,6 +3,7 @@ from rest_framework import request, serializers
 from ..models import *
 from ..constants import *
 from django.db.models import Q
+from datetime import datetime, date
 
 class UnitSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,6 +70,25 @@ class DemandeNOTAMForCreateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
 
+    def validate_start_val_period(self, value):
+        if date.today() > value:
+            raise serializers.ValidationError("this date cannot be earlier than the current date") 
+        return value
+
+    def validate_end_val_period(self, value):
+        start_val_period = datetime.strptime(self.initial_data['start_val_period'], "%Y-%m-%d").date()
+        if start_val_period >= value:
+            raise serializers.ValidationError("this date cannot be earlier than the start period date") 
+        return value
+
+    def validate_daily_freq_end(self, value):
+        daily_freq_start = datetime.strptime(self.initial_data['daily_freq_start'], "%H:%M:%S").time()
+        if daily_freq_start > value:
+            raise serializers.ValidationError("the end time of the daily period cannot be earlier than the start time")            
+        return value
+
+
+
 class DemandeSUPPForCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DemandeSUPP
@@ -87,6 +107,18 @@ class DemandeSUPPForCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         return super().update(instance, validated_data)
+
+    def validate_start_val_period(self, value):
+        if date.today() > value:
+            raise serializers.ValidationError("this date cannot be earlier than the current date") 
+        return value
+
+    def validate_end_val_period(self, value):
+        start_val_period = datetime.strptime(self.initial_data['start_val_period'], '%Y-%m-%d').date()
+        if start_val_period >= value:
+            raise serializers.ValidationError("this date cannot be earlier than the start period date") 
+        return value
+
 
 class DemandeAICForCreateSerializer(serializers.ModelSerializer):
     class Meta:

@@ -56,17 +56,17 @@ class NationalInformer(models.Model):
         return self.name
 
 class Aerodrome(models.Model):
-    code = models.CharField(max_length=10)
-    name = models.CharField(max_length=80)
-    location_ind = models.CharField(max_length=10)
+    code = models.CharField(max_length=10, unique=True)
+    name = models.CharField(max_length=80, unique=True)
+    location_ind = models.CharField(max_length=10, unique=True)
     local_informer = models.ForeignKey(LocalInformer, on_delete=DO_NOTHING)
     def __str__(self) -> str:
         return self.name
 
 class Unit(models.Model):
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
     name = models.CharField(max_length=70)
-    phone_number = models.CharField(max_length=20)
+    phone_number = models.CharField(max_length=20, unique=True)
     fax = models.CharField(max_length=40)
     address = models.CharField(max_length=80)
     rsfta = models.CharField(max_length=100, blank=True)
