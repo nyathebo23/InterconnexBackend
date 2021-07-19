@@ -1,7 +1,7 @@
 from django.db import router
 from django.urls import path, include
 from .views import *
-from .ddiaviewsets import *
+from .ddia_viewsets import *
 from rest_framework.routers import DefaultRouter
 router = DefaultRouter()
 
@@ -50,9 +50,9 @@ urlpatterns = [
     path('verifsource/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_sourceverifier_view, name='listDDIAprocessed-verifsource'),
     path('sourcestructure/listDDIA/waited/<str:type_ddia>', listDDIA_inwaiting_for_sourcestructure_view, name='listDDIAwaited-sourcestructure'),
     path('sourcestructure/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_sourcestructure_view, name='listDDIAprocessed-sourcestructure'),
-    path('localinformer/listDDIA/waited/<str:type_ddia>', listDDIA_inwaiting_for_localinformer_view, name='listDDIAwaited-localinformer'),
-    path('localinformer/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_localinformer_view, name='listDDIAprocessed-localinformer'),
-    path('nationalinformer/listDDIA/waited/<str:type_ddia>', listDDIA_inwaiting_for_nationalinformer_view, name='listDDIAwaited-nationalinformer'),
-    path('nationalinformer/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_nationalinformer_view, name='listDDIAprocessed-nationalinformer'),
+    path('localinformer/listDDIA/waited/<str:type_ddia>', listDDIA_inwaiting_for_authoritylocalinformer_view, name='listDDIAwaited-localinformer'),
+    path('localinformer/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_authoritylocalinformer_view, name='listDDIAprocessed-localinformer'),
+    path('nationalinformer/listDDIA/waited/<str:type_ddia>', listDDIA_inwaiting_for_nationalinf_view, name='listDDIAwaited-nationalinformer'),
+    path('nationalinformer/listDDIA/processed/<str:type_ddia>', listDDIA_processed_for_nationalinf_view, name='listDDIAprocessed-nationalinformer'),
     path('', include(router.urls)),
 ]

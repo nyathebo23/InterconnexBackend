@@ -17,7 +17,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return token
 
-# ...
+
 class CustomUserBaseSerializer(serializers.ModelSerializer):
     def request_owner(self):
         request = self.context.get('request', None)

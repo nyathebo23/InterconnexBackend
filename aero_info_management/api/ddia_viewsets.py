@@ -1,5 +1,5 @@
 from django.db import transaction
-from .permissions import CanInitiateDDIA, CanReadDDIA, IsLocalInformer, IsNationalInformer, IsOwner, IsSourceCommander, IsVerifier
+from .permissions import *
 from django.core.checks import messages
 from rest_framework import generics, mixins , response, status, views, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
@@ -7,6 +7,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import filters
 from .serializers import *
+from .ddia_serializers import *
 from ..constants import *
 from django.db.models import Q
 
@@ -19,7 +20,6 @@ class DDIAGenericViewSet(viewsets.ModelViewSet):
             permission_classes = [IsAuthenticated, IsOwner]
         elif self.action == 'retrieve':
             permission_classes = [IsAuthenticated, CanReadDDIA]
-
         return [permission() for permission in permission_classes ]
 
     def get_serializer_context(self, *args, **kwargs):
@@ -34,55 +34,73 @@ class DDIAGenericViewSet(viewsets.ModelViewSet):
         return response.Response(resp, status=status.HTTP_403_FORBIDDEN) 
 
 class DDIAControl:
-    def submit_control(self, ddia, user, agent, data):
+    def submit_control(self, ddia, agent, data):
         next_state = PENDING_VERIFICATION_STATE if data['decision'] == 'submit' else CANCELLED_STATE
         if agent.user.role == SOURCE_VERIFIER and next_state == PENDING_VERIFICATION_STATE:
             next_state = PENDING_ADMISSION_STATE
         ddia.state = next_state
         ddia.save()
-        ActionAgentOnDDIA.objects.create(agent=agent, prev_state=DRAFT_STATE, new_state=next_state, ddia_object=ddia)
-        hist = DDIAHistory.objects.create(user=user, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        SourceStructureAction.objects.create(agent=agent, prev_state=DRAFT_STATE, new_state=next_state, ddia_object=ddia)
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=DRAFT_STATE, new_value=next_state, field='state') 
 
-    def verify_control(self, ddia, user, agent, data):
+    def verify_localinf_control(self, ddia, agent, data):
         next_state = PENDING_ADMISSION_STATE if data['decision'] == 'accept' else NON_CONFORMING_STATE
         ddia.state = next_state
         ddia.save()
-        ActionAgentOnDDIA.objects.create(agent=agent, prev_state=PENDING_VERIFICATION_STATE, new_state=next_state, ddia_object=ddia)
-        hist = DDIAHistory.objects.create(user=user, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        nationalinf = None if next_state == NON_CONFORMING_STATE or data.get('nationalinf_id') is None else NationalInformer.objects.get(id=data['nationalinf_id'])
+        LocalInformerAction.objects.create(local_agent=agent, prev_state=PENDING_VERIFICATION_STATE, new_state=next_state, ddia_object=ddia, target_nationalinf=nationalinf)        
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_VERIFICATION_STATE, new_value=next_state, field='state')
         if data['decision'] != 'accept':
-            RequestReferral.objects.create(user=user, message=data['message'], ddia_object=ddia)   
+            RequestReferral.objects.create(agent_object=agent, message=data['message'], ddia_object=ddia)   
 
-    def admit_control(self, ddia, user, agent, data):
-        next_state = PENDING_VALIDATION_STATE if data['decision'] == 'accept' else NOT_ADMITTED_STATE
+    def verify_control(self, ddia, agent, data):
+        next_state = PENDING_ADMISSION_STATE if data['decision'] == 'accept' else NON_CONFORMING_STATE
         ddia.state = next_state
         ddia.save()
-        ActionAgentOnDDIA.objects.create(agent=agent, prev_state=PENDING_ADMISSION_STATE, new_state=next_state, ddia_object=ddia)
-        hist = DDIAHistory.objects.create(user=user, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        SourceStructureAction.objects.create(agent=agent, prev_state=PENDING_VERIFICATION_STATE, new_state=next_state, ddia_object=ddia)
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_VERIFICATION_STATE, new_value=next_state, field='state')
+        if data['decision'] != 'accept':
+            RequestReferral.objects.create(agent_object=agent, message=data['message'], ddia_object=ddia)   
+
+    def admit_control(self, ddia, agent, has_localinf, data):
+        if data['decision'] == 'accept':
+            if has_localinf and data['afterapprove'] == 'yes':
+                next_state = PENDING_APPROVAL_STATE
+            else:
+                next_state = PENDING_VALIDATION_STATE
+        else:
+            next_state = NOT_ADMITTED_STATE
+        ddia.state = next_state
+        ddia.save()
+        SourceStructureAction.objects.create(agent=agent, prev_state=PENDING_ADMISSION_STATE, new_state=next_state, ddia_object=ddia)
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_ADMISSION_STATE, new_value=next_state, field='state')
         if data['decision'] != 'accept':
-            RequestReferral.objects.create(user=user, message=data['message'], ddia_object=ddia)       
+            RequestReferral.objects.create(agent_object=agent, message=data['message'], ddia_object=ddia)       
 
-    def validate_control(self, ddia, user, agent, data):
+    def validate_control(self, ddia, agent, data):
         next_state = PENDING_APPROVAL_STATE if data['decision'] == 'accept' else NOT_VALIDATED_STATE
         ddia.state = next_state
         ddia.save()
-        Validation.objects.create(local_agent=agent, new_state=next_state, ddia_object=ddia)
-        hist = DDIAHistory.objects.create(user=user, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        nationalinf = NationalInformer.objects.filter(is_authority=True).first()
+        LocalInformerAction.objects.create(local_agent=agent, new_state=next_state, ddia_object=ddia, target_nationalinf=nationalinf)
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_VALIDATION_STATE, new_value=next_state, field='state')
         if data['decision'] != 'accept':
-            RequestReferral.objects.create(user=user, message=data['message'], ddia_object=ddia)    
+            RequestReferral.objects.create(agent_object=agent, message=data['message'], ddia_object=ddia)    
 
-    def approve_control(self, ddia, user, agent, data):
+    def approve_control(self, ddia, agent, data):
         next_state = PENDING_ADMISSION_STATE if data['decision'] == 'accept' else NON_CONFORMING_STATE
         ddia.state = next_state
         ddia.save()
-        Approbation.objects.create(national_agent=agent, new_state=next_state, ddia_object=ddia)
-        hist = DDIAHistory.objects.create(user=user, type_action=CONTROLE_ACTION, ddia_object=ddia)
+        NationalInformerAction.objects.create(national_agent=agent, new_state=next_state, ddia_object=ddia)
+        hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_APPROVAL_STATE, new_value=next_state, field='state')
         if data['decision'] != 'accept':
-            RequestReferral.objects.create(user=user, message=data['message'], ddia_object=ddia)      
+            RequestReferral.objects.create(agent_object=agent, message=data['message'], ddia_object=ddia)      
 
 
 class DemandeAICViewSet(DDIAGenericViewSet):
@@ -123,7 +141,7 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         elif self.action == 'admit':
             return [IsAuthenticated(), IsSourceCommander()]
         elif self.action == 'validate':
-            return [IsAuthenticated(), IsLocalInformer()]
+            return [IsAuthenticated(), IsAuthorityLocalInformer()]
         elif self.action == 'approve':
             return [IsAuthenticated(), IsNationalInformer()]
         
@@ -136,35 +154,42 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk)
-        print(ddia)
         ddia.deposit_datetime = datetime.now() 
         self.check_object_permissions(request, ddia)
         agent = Agent.objects.get(user=user)   
         try:
             with transaction.atomic():
-                self.submit_control(ddia, user, agent, data)
+                self.submit_control(ddia, agent, data)
         except Exception as e:
+            print(e)
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsVerifier])
     def verify(self, request, type_ddia, pk, format='json'):
+        islocalinf = request.GET.get('is_localinf') == 'yes'
         self.check_permissions(request)
         user, data = request.user, request.data
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk) 
         self.check_object_permissions(request, ddia)
-        agent = Agent.objects.get(user=user)  
         try:
             with transaction.atomic(): 
-                self.verify_control(ddia, user, agent, data)
+                if islocalinf:
+                    agent = LocalAgent.objects.get(user=user)
+                    self.verify_localinf_control(ddia, agent, data)
+                else:
+                    agent = Agent.objects.get(user=user)  
+                    self.verify_control(ddia, agent, data)
         except Exception as e:
+            print(e)
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
      
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsSourceCommander])
     def admit(self, request, type_ddia, pk, format='json'):
+        from_localinf = request.GET.get('from_localinf') == 'yes'
         self.check_permissions(request)
         user, data = request.user, request.data
         type_ddia = self.kwargs.get('type_ddia')
@@ -174,12 +199,12 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         agent = Agent.objects.get(user=user)   
         try:
             with transaction.atomic():
-                self.admit_control(ddia, user, agent, data)
+                self.admit_control(ddia, agent, from_localinf, data)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
-    @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsLocalInformer])
+    @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsAuthorityLocalInformer])
     def validate(self, request, type_ddia, pk, format='json'):
         self.check_permissions(request)
         user, data = request.user, request.data
@@ -190,8 +215,9 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         agent = LocalAgent.objects.get(user=user)   
         try:
             with transaction.atomic():
-                self.validate_control(ddia, user, agent, data)
+                self.validate_control(ddia, agent, data)
         except Exception as e:
+            print(e)
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
@@ -206,7 +232,7 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         agent = NationalAgent.objects.get(user=user)  
         try:
             with transaction.atomic(): 
-                self.approve_control(ddia, user, agent, data)
+                self.approve_control(ddia, agent, data)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)     

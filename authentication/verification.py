@@ -54,7 +54,7 @@ class SignUpViewset(viewsets.ViewSet):
         operation_summary="Activate account (after sign up)",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -67,35 +67,34 @@ class SignUpViewset(viewsets.ViewSet):
         validator = SignUpVerificationValidator(data=request.query_params)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        if validator.is_valid():
-            validated_data = validator.validated_data
-            code = validated_data['code']
-            user_id = int(validated_data['user_id'])
+        validated_data = validator.validated_data
+        code = validated_data['code']
+        user_id = int(validated_data['user_id'])
 
-            confirm_token = ConfirmToken.objects.get(
-                user__id=user_id, kind=SIGNUP_TOKEN)
+        confirm_token = ConfirmToken.objects.get(
+            user__id=user_id, kind=SIGNUP_TOKEN)
 
-            user = User.objects.get(id=int(user_id))
-            date_time = confirm_token.token_epires_at
-            key = confirm_token.token_hash
-            if (timezone.now() < date_time):
-                counter = int(user.id)
-                hotp = pyotp.HOTP(key)
-                if int(code) == int(hotp.at(counter)):
-                    user.is_active = True
-                    user.save()
-                    confirm_token.delete()
-                    data = get_tokens_plus_user(user , request)
-                    data["message"] = "Account Activated Successfully"
-                    return Response(data, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        "message": "Invalid Code"
-                    }, status=status.HTTP_400_BAD_REQUEST)
+        user = User.objects.get(id=int(user_id))
+        date_time = confirm_token.token_epires_at
+        key = confirm_token.token_hash
+        if (timezone.now() < date_time):
+            counter = int(user.id)
+            hotp = pyotp.HOTP(key)
+            if int(code) == int(hotp.at(counter)):
+                user.is_active = True
+                user.save()
+                confirm_token.delete()
+                data = get_tokens_plus_user(user , request)
+                data["message"] = "Account Activated Successfully"
+                return Response(data, status=status.HTTP_200_OK)
             else:
                 return Response({
-                    "message": "Code Expired"
+                    "message": "Invalid Code"
                 }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response({
+                "message": "Code Expired"
+            }, status=status.HTTP_400_BAD_REQUEST)
 
     @swagger_auto_schema(
         method='get',
@@ -111,7 +110,7 @@ class SignUpViewset(viewsets.ViewSet):
         operation_summary="Resend Code To Activate Account",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -124,14 +123,13 @@ class SignUpViewset(viewsets.ViewSet):
         validator = SignUpResendValidator(data=request.query_params)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        if validator.is_valid():
-            validated_data = validator.validated_data
-            email = validated_data['email']
-            user = User.objects.get(email=email)
-            send_signup_verificaion_mail(user=user, request=request)
-            return Response({
-                "message": "Code resent succssfully!. Please check your email"
-            }, status=status.HTTP_200_OK)
+        validated_data = validator.validated_data
+        email = validated_data['email']
+        user = User.objects.get(email=email)
+        send_signup_verificaion_mail(user=user, request=request)
+        return Response({
+            "message": "Code resent succssfully!. Please check your email"
+        }, status=status.HTTP_200_OK)
 
 
 class PasswordResetViewset(viewsets.ViewSet):
@@ -151,7 +149,7 @@ class PasswordResetViewset(viewsets.ViewSet):
         operation_summary="Request Change of Password",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -164,14 +162,13 @@ class PasswordResetViewset(viewsets.ViewSet):
         validator = RequestResetPasswordValidator(data=request.query_params)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        if validator.is_valid():
-            validated_data = validator.validated_data
-            email = validated_data['email']
-            user = User.objects.get(email=email)
-            send_password_reset_mail(user=user, request=request)
-            return Response({
-                "message": "Validation Code Sent!. Please check your email"
-            }, status=status.HTTP_200_OK)
+        validated_data = validator.validated_data
+        email = validated_data['email']
+        user = User.objects.get(email=email)
+        send_password_reset_mail(user=user, request=request)
+        return Response({
+            "message": "Validation Code Sent!. Please check your email"
+        }, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
         method='put',
@@ -199,7 +196,7 @@ class PasswordResetViewset(viewsets.ViewSet):
         operation_summary="Reset (change) Password",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -212,42 +209,41 @@ class PasswordResetViewset(viewsets.ViewSet):
         validator = ResetPasswordValidator(data=request.query_params)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        if validator.is_valid():
-            validated_data = validator.validated_data
+        validated_data = validator.validated_data
 
-            user_id = validated_data['user_id']
-            user = User.objects.get(id=user_id)
-            code = validated_data['code']
-            password = validated_data['password']
+        user_id = validated_data['user_id']
+        user = User.objects.get(id=user_id)
+        code = validated_data['code']
+        password = validated_data['password']
 
-            confirm_token = ConfirmToken.objects.get(
-                user__id=user_id, kind=PASSWORD_TOKEN)
-            date_time = confirm_token.token_epires_at
-            key = confirm_token.token_hash
-            if (timezone.now() < date_time):
-                counter = int(user.id)
+        confirm_token = ConfirmToken.objects.get(
+            user__id=user_id, kind=PASSWORD_TOKEN)
+        date_time = confirm_token.token_epires_at
+        key = confirm_token.token_hash
+        if (timezone.now() < date_time):
+            counter = int(user.id)
 
-                hotp = pyotp.HOTP(key)
+            hotp = pyotp.HOTP(key)
 
-                if int(code) == int(hotp.at(counter)):
-                    user.set_password(password)
-                    user.save()
-                    confirm_token.delete()
-                    return Response({
-                        "message": "Password Resetted Successfully"
-                    }, status=status.HTTP_200_OK)
-                else:
-                    return Response({
-                        "message": "Invalid Code"
-                    }, status=status.HTTP_400_BAD_REQUEST)
+            if int(code) == int(hotp.at(counter)):
+                user.set_password(password)
+                user.save()
+                confirm_token.delete()
+                return Response({
+                    "message": "Password Resetted Successfully"
+                }, status=status.HTTP_200_OK)
             else:
                 return Response({
-                    "message": "Code Expired"
+                    "message": "Invalid Code"
                 }, status=status.HTTP_400_BAD_REQUEST)
-
+        else:
             return Response({
-                "message": "Code resent succssfully!. Please check your email"
-            }, status=status.HTTP_200_OK)
+                "message": "Code Expired"
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            "message": "Code resent succssfully!. Please check your email"
+        }, status=status.HTTP_200_OK)
 
     @swagger_auto_schema(
         method='get',
@@ -263,7 +259,7 @@ class PasswordResetViewset(viewsets.ViewSet):
         operation_summary="Resend Password change (reset) Code",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -276,14 +272,13 @@ class PasswordResetViewset(viewsets.ViewSet):
         validator = RequestResetPasswordValidator(data=request.query_params)
         if not validator.is_valid():
             return Response(validator.errors, status=status.HTTP_400_BAD_REQUEST)
-        if validator.is_valid():
-            validated_data = validator.validated_data
-            email = validated_data['email']
-            user = User.objects.get(email=email)
-            send_password_reset_mail(user=user, request=request)
-            return Response({
-                "message": "Code resent succssfully!. Please check your email"
-            }, status=status.HTTP_200_OK)
+        validated_data = validator.validated_data
+        email = validated_data['email']
+        user = User.objects.get(email=email)
+        send_password_reset_mail(user=user, request=request)
+        return Response({
+            "message": "Code resent succssfully!. Please check your email"
+        }, status=status.HTTP_200_OK)
 
 
 class ChangeEmailViewset(viewsets.ViewSet):
@@ -309,7 +304,7 @@ class ChangeEmailViewset(viewsets.ViewSet):
         operation_summary="Request Change Email",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -356,7 +351,7 @@ class ChangeEmailViewset(viewsets.ViewSet):
         operation_summary="Confirm Email Change",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -425,7 +420,7 @@ class ChangeEmailViewset(viewsets.ViewSet):
         operation_summary="Resend Email change Code",
         responses={
             status.HTTP_200_OK: openapi.Response(
-                description="Sucess"
+                description="Success"
             ),
             status.HTTP_401_UNAUTHORIZED: openapi.Response(
                 description="Unauthorized"
@@ -449,5 +444,5 @@ class ChangeEmailViewset(viewsets.ViewSet):
 
             send_change_email_code(user=user, email=new_email)
             return Response({
-                "message": "Code resent succssfully!. Please check your email"
+                "message": "Code resent successfully!. Please check your email"
             }, status=status.HTTP_200_OK)
