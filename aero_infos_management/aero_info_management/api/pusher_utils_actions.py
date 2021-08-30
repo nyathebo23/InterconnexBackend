@@ -178,6 +178,7 @@ def notify_nationalinformer_after_action(next_state: str, ddia, nationalinf: Nat
             'typeDDIA': typeDDIA,
             'notification': NotificationSerializer(notification).data
         })
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanInitiateDDIA])
 def get_notifications_sourceunit(request: HttpRequest):
@@ -187,7 +188,7 @@ def get_notifications_sourceunit(request: HttpRequest):
     else:
         agent = LocalAgent.objects.select_related('localinformer__unit').get(user=request.user)
         unit = agent.localinformer.unit
-    notifications = Notification.objects.filter(unit=unit)
+    notifications = Notification.objects.filter(unit=unit).filter(Q(event='ddia-creation'))
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -207,7 +208,7 @@ def get_notifications_sourceverifier(request: HttpRequest):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsSourceCommander])
 def get_notifications_sourcecommand(request: HttpRequest):
-    agent = Agent.objects.select_related('aerodrme').filter(user=request.user).first()
+    agent = Agent.objects.select_related('aerodrome').filter(user=request.user).first()
     aerodrome = agent.aerodrome
     notifications = Notification.objects.filter(aerodrome=aerodrome).filter(Q(event='ddia-reception-verifsubmission') | Q(event='ddia-reception-verification'))
     data = NotificationSerializer(notifications, many=True).data
@@ -216,7 +217,7 @@ def get_notifications_sourcecommand(request: HttpRequest):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsNationalInformer])
 def get_notifications_nationalinformer(request: HttpRequest):
-    agent = NationalAgent.objects.select_related('unit').filter(user=request.user).first()
+    agent = NationalAgent.objects.select_related('nationalinformer').filter(user=request.user).first()
     nationalinf = agent.nationalinformer
     notifications = Notification.objects.filter(nationalinformer=nationalinf).filter(Q(event='ddia-signal-approbation') | Q(event='ddia-reception-validation'))
     data = NotificationSerializer(notifications, many=True).data
@@ -225,8 +226,20 @@ def get_notifications_nationalinformer(request: HttpRequest):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAuthorityLocalInformer])
 def get_notifications_localinformer(request: HttpRequest):
-    agent = LocalAgent.objects.select_related('unit').filter(user=request.user).first()
+    agent = LocalAgent.objects.select_related('localinformer').filter(user=request.user).first()
     localinf = agent.localinformer
     notifications = Notification.objects.filter(localinformer=localinf, event='ddia-reception-admission')
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mark_notif_as_read(request: HttpRequest, idNotif):
+    try:
+        notif = Notification.objects.get(id=idNotif)
+        notif.read = True
+        notif.save()
+        return response.Response({'message': 'ok'}, status=status.HTTP_200_OK)
+    except:
+        return response.Response({'message': 'no notif with this id found'}, status=status.HTTP_404_NOT_FOUND)
+

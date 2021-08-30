@@ -1,9 +1,8 @@
 import re
-
 from django.db.models.query import QuerySet
 from django.http.request import HttpRequest
 from .permissions import *
-from rest_framework import generics, mixins, response, status, views, viewsets, filters
+from rest_framework import generics, mixins, response, status, views, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, action
 from .serializers import *
@@ -206,7 +205,24 @@ def listDDIA_inwaiting_for_sourceverifier_view(request, type_ddia):
 
 @api_view(['GET'])
 def listDDIA_inwaiting_for_initiator_view(request):
-    return response.Response({})
+    try:
+        agent = Agent.objects.select_related('unit').get(user = request.user)
+        ownunit = agent.unit
+    except:
+        agent = LocalAgent.objects.select_related('localinformer__unit').get(user = request.user)
+        ownunit = agent.localinformer.unit
+    demandes_notam = DemandeNOTAM.objects.filter(unit=ownunit).filter(state__in=[NON_CONFORMING_STATE, NOT_ADMITTED_STATE, NOT_VALIDATED_STATE, NOT_APPROVED_STATE])
+    data_notam = DemandeNOTAMItemListSerializer(demandes_notam, many=True, context={'request': request}).data
+    demandes_suppaip = DemandeSUPP.objects.filter(unit=ownunit).filter(state__in=[NON_CONFORMING_STATE, NOT_ADMITTED_STATE, NOT_VALIDATED_STATE, NOT_APPROVED_STATE])
+    data_supp = DemandeSUPPItemListSerializer(demandes_suppaip, many=True, context={'request': request}).data
+    demandes_aic = DemandeAIC.objects.filter(unit=ownunit).filter(state__in=[NON_CONFORMING_STATE, NOT_ADMITTED_STATE, NOT_VALIDATED_STATE, NOT_APPROVED_STATE])
+    data_aic = DemandeAICItemListSerializer(demandes_aic, many=True, context={'request': request}).data  
+    data = {
+        'demandesAIC': data_aic,
+        'demandesNOTAM': data_notam,
+        'demandesSUPP': data_supp
+    }  
+    return response.Response(data, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsNationalInformer])

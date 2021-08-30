@@ -58,11 +58,15 @@ class NationalInformerSerializer(serializers.ModelSerializer):
     def validate(self, data: dict):
         is_authority = data.get('is_authority')
         if is_authority == True:
-            nationalInfExist = NationalInformer.objects.filter(is_authority=True).exists()
-            if nationalInfExist:
-                raise serializers.ValidationError({'is_authority': 'the national informant with is_authority = True must be unique'})
+            nationalInfExist = NationalInformer.objects.filter(is_authority=True)
+            if self.instance:
+                nationalInfExist = nationalInfExist.exclude(pk=self.instance.pk)
+            if nationalInfExist.exists():
+                raise serializers.ValidationError({'is_authority': 'the national informant authority must be unique'})
         name = data.get('name')
-        nationalInfExist = NationalInformer.objects.filter(name=name).exists()
+        nationalInfExist = NationalInformer.objects.filter(name=name)
+        if self.instance:
+            nationalInfExist = nationalInfExist.exclude(pk=self.instance.pk)
         if nationalInfExist:
             raise serializers.ValidationError({'name': 'The name of the national informant must be unique'})
         return data

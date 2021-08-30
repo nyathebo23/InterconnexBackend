@@ -10,7 +10,7 @@ from django.db.models import Q
 from datetime import datetime, date, tzinfo
 from django.contrib.auth import get_user_model
 from .serializers import *
-from .agents_serializers import DDIAHistorySerializer
+from .agents_serializers import DDIAHistorySerializer, RequestReferralSerializer
 import pytz
 from django.db import transaction
 
@@ -51,7 +51,7 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True, required=False)
     class Meta:
         model = DemandeNOTAM
-        exclude = ['initiator', 'unit', 'location_indicator']
+        exclude = ['initiator', 'unit', 'location_indicator', 'state']
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -76,7 +76,34 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
             return demandeNOTAM
 
     def update(self, instance, validated_data):
-        return super().update(instance, validated_data)
+        request = self.context.get("request")
+        user = request.user
+        agent = Agent.objects.select_related('unit__aerodrome').filter(user=user).first()
+        if agent is None:
+            agent = LocalAgent.objects.select_related('localinformer__unit__aerodrome').get(user=user)
+        
+        attachs = validated_data.pop("attachments", [])
+        with transaction.atomic():
+            if len(attachs) > 0:
+                Attachment.objects.filter(notam__pk=instance.pk).delete()
+            Attachment.objects.bulk_create(
+                Attachment(**{"file": attach['file'], "ddia_object": instance}) for attach in attachs
+            )
+            history = DDIAHistory.objects.create(type_action=MODIF_ACTION, agent_object=agent, ddia_object=instance)
+            for attr, value in validated_data.items():
+                prev, new = getattr(instance, attr), value
+                if prev != new:
+                    DDIAModifHistory.objects.create(history=history, field=attr, prev_value=prev, new_value=new)
+                    setattr(instance, attr, new)
+            SourceStructureAction.objects.filter(notam__pk=instance.pk).delete()
+            localinfs = LocalInformerAction.objects.filter(notam__pk=instance.pk)
+            if localinfs.exists():
+                localinfs.delete()
+            if instance.state == NOT_APPROVED_STATE:
+                NationalInformerAction.objects.filter(notam__pk=instance.pk).delete()
+            instance.state = DRAFT_STATE
+            instance.save()
+            return instance
 
     def validate_start_val_period(self, value):
         if timezone.now() > value:
@@ -90,7 +117,7 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_daily_freq_end(self, value):
-        daily_freq_start = datetime.strptime(self.initial_data['daily_freq_start'], "%H:%M:%S").time()
+        daily_freq_start = datetime.strptime(self.initial_data['daily_freq_start'][:5], "%H:%M").time()
         if daily_freq_start > value:
             raise serializers.ValidationError("the end time of the daily period cannot be earlier than the start time")            
         return value
@@ -100,7 +127,7 @@ class DemandeSUPPForCreateUpdateSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True)
     class Meta:
         model = DemandeSUPP
-        exclude = ['initiator', 'unit', 'location_indicator']
+        exclude = ['initiator', 'unit', 'location_indicator', 'state']
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -126,7 +153,33 @@ class DemandeSUPPForCreateUpdateSerializer(serializers.ModelSerializer):
             return demandeSUPP
 
     def update(self, instance, validated_data):
-        return super().update(instance, validated_data)
+        request = self.context.get("request")
+        user = request.user
+        agent = Agent.objects.select_related('unit__aerodrome').filter(user=user).first()
+        if agent is None:
+            agent = LocalAgent.objects.select_related('localinformer__unit__aerodrome').get(user=user)
+        with transaction.atomic():
+            attachs = validated_data.pop("attachments", [])
+            if len(attachs) > 0:
+                Attachment.objects.filter(notam__pk=instance.pk).delete()
+            Attachment.objects.bulk_create(
+                Attachment(**{"file": attach['file'], "ddia_object": instance}) for attach in attachs
+            )
+            history = DDIAHistory.objects.create(type_action=MODIF_ACTION, agent_object=agent, ddia_object=instance)
+            for attr, value in validated_data.items():
+                prev, new = getattr(instance, attr), value
+                if prev != new:
+                    DDIAModifHistory.objects.create(history=history, field=attr, prev_value=prev, new_value=new)
+                    setattr(instance, attr, new)
+            SourceStructureAction.objects.filter(suppaip__pk=instance.pk).delete()
+            localinfs = LocalInformerAction.objects.filter(suppaip__pk=instance.pk)
+            if localinfs.exists():
+                localinfs.delete()
+            if instance.state == NOT_APPROVED_STATE:
+                NationalInformerAction.objects.filter(suppaip__pk=instance.pk).delete()
+            instance.state = DRAFT_STATE
+            instance.save()
+            return instance
 
     def validate_start_val_period(self, value):
         if timezone.now() > value:
@@ -144,7 +197,7 @@ class DemandeAICForCreateUpdateSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(many=True)
     class Meta:
         model = DemandeAIC
-        exclude = ['initiator', 'unit', 'location_indicator']
+        exclude = ['initiator', 'unit', 'location_indicator', 'state']
 
     def create(self, validated_data):
         request = self.context.get("request")
@@ -163,19 +216,46 @@ class DemandeAICForCreateUpdateSerializer(serializers.ModelSerializer):
             demandeAIC = DemandeAIC.objects.create(**validated_data, ident_ddia=identaic, initiator=user, 
             unit=unit, location_indicator=aerodrome.location_ind)
             Attachment.objects.bulk_create(
-            Attachment(**{"file": attach['file'], "ddia_object": demandeAIC}) for attach in attachs
-            )        
+            Attachment(**{"file": attach['file'], "ddia_object": demandeAIC}) for attach in attachs)        
             history = DDIAHistory.objects.create(type_action=CREATE_ACTION, agent_object=agent, ddia_object=demandeAIC)
             return demandeAIC
 
     def update(self, instance, validated_data):
-        return super().update(instance, validated_data)
-
+        request = self.context.get("request")
+        user = request.user
+        agent = Agent.objects.select_related('unit__aerodrome').filter(user=user).first()
+        if agent is None:
+            agent = LocalAgent.objects.select_related('localinformer__unit__aerodrome').get(user=user)
+        
+        attachs = validated_data.pop("attachments", [])
+        with transaction.atomic():
+            if len(attachs) > 0:
+                Attachment.objects.filter(notam__pk=instance.pk).delete()
+            Attachment.objects.bulk_create(
+                Attachment(**{"file": attach['file'], "ddia_object": instance}) for attach in attachs
+            )
+            history = DDIAHistory.objects.create(type_action=MODIF_ACTION, agent_object=agent, ddia_object=instance)
+            for attr, value in validated_data.items():
+                prev, new = getattr(instance, attr), value
+                if prev != new:
+                    DDIAModifHistory.objects.create(history=history, field=attr, prev_value=prev, new_value=new)
+                    setattr(instance, attr, new)
+            SourceStructureAction.objects.filter(aic__pk=instance.pk).delete()
+            localinfs = LocalInformerAction.objects.filter(aic__pk=instance.pk)
+            if localinfs.exists():
+                localinfs.delete()
+            if instance.state == NOT_APPROVED_STATE:
+                NationalInformerAction.objects.filter(aic__pk=instance.pk).delete()
+            instance.state = DRAFT_STATE
+            instance.save()
+            return instance
+    
 class DemandeNOTAMSerializer(serializers.ModelSerializer):
     initiator_infos = UserSerializer(read_only=True)
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
+    request_referral = RequestReferralSerializer(read_only=True, many=False)
 
     class Meta:
         model = DemandeNOTAM
@@ -187,6 +267,7 @@ class DemandeSUPPSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
+    request_referral = RequestReferralSerializer(read_only=True, many=False)
 
     class Meta:
         model = DemandeSUPP
@@ -198,6 +279,8 @@ class DemandeAICSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
+    request_referral = RequestReferralSerializer(read_only=True, many=False)
+
     class Meta:
         model = DemandeAIC
         fields = '__all__'

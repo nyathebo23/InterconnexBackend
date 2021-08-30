@@ -151,3 +151,8 @@ class DDIAHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = DDIAHistory
         fields = ['agent_object', 'type_action', 'modifshistory', 'date_time']
+
+class RequestReferralSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RequestReferral
+        fields = ['message', 'date_time']

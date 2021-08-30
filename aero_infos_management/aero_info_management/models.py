@@ -50,6 +50,7 @@ class Notification(models.Model):
     ddia_type = models.CharField(max_length=20, choices=TYPES_DDIA)
     ref_ddia = models.CharField(max_length=20)   
     new_ddia_state = models.CharField(max_length=50, choices=STATES)
+    read = models.BooleanField(default=False)
     date_time = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ['-date_time']
@@ -86,6 +87,7 @@ class LocalInformer(models.Model):
 
 class NationalInformer(models.Model):
     name = models.CharField(max_length=50)
+    email = models.EmailField(default='segc@ccaa.aero')
     is_authority = models.BooleanField(default=False)
     notifications = GenericRelation(Notification, related_query_name='nationalinformer', content_type_field='receiver_type', object_id_field='receiver_id')
     def __str__(self) -> str:
@@ -141,10 +143,10 @@ class NationalInformerAction(models.Model):
     ddia_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveBigIntegerField()
     ddia_object = GenericForeignKey('ddia_type', 'object_id')
-    new_state = models.CharField(max_length=40, choices=STATES_AFTER_VALIDATION)
+    new_state = models.CharField(max_length=40, choices=STATES_AFTER_NATIONALINF_ACTION)
     date_time = models.DateTimeField(auto_now_add=True)
     class Meta:
-        unique_together   = ('ddia_type', 'object_id')
+        unique_together   = ('ddia_type', 'object_id', 'new_state')
         ordering = ['date_time']
 
 class LocalInformerAction(models.Model):
@@ -190,6 +192,7 @@ class DemandeNOTAM(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='notam', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='notam', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='notam',  content_type_field='ddia_type')
+    referral = GenericRelation(RequestReferral, related_query_name='notam',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='notam', content_type_field='ddia_type', object_id_field='id_object')
 
 
@@ -205,6 +208,7 @@ class DemandeSUPP(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='suppaip', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='suppaip', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='suppaip',  content_type_field='ddia_type')
+    referral = GenericRelation(RequestReferral, related_query_name='suppaip',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='suppaip', content_type_field='ddia_type', object_id_field='id_object')
 
 class DemandeAIC(DDIA):
@@ -215,6 +219,7 @@ class DemandeAIC(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='aic', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='aic', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='aic',  content_type_field='ddia_type')
+    referral = GenericRelation(RequestReferral, related_query_name='aic',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='aic', content_type_field='ddia_type', object_id_field='id_object')
 
 

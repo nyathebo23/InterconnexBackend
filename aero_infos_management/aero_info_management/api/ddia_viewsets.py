@@ -40,7 +40,7 @@ class DDIAGenericViewSet(viewsets.ModelViewSet):
 class DDIAControl:
     def submit_control(self, ddia, agent, data, typeDDIA, islocalinf: bool, request):
         next_state = PENDING_VERIFICATION_STATE
-        if agent.user.role == SOURCE_VERIFIER and next_state == PENDING_VERIFICATION_STATE:
+        if agent.user.role == SOURCE_VERIFIER:
             next_state = PENDING_ADMISSION_STATE
         ddia.state = next_state
         ddia.save()
@@ -60,15 +60,16 @@ class DDIAControl:
         DDIAModifHistory.objects.create(history=hist, prev_value=DRAFT_STATE, new_value=next_state, field='state') 
 
     def cancel_ddia(self, ddia, agent, typeDDIA, islocalinf: bool):
+        prevstate = ddia.state
         ddia.state = CANCELLED_STATE
         ddia.save()
         if islocalinf:
-            action = LocalInformerAction.objects.create(local_agent=agent, prev_state=DRAFT_STATE, new_state=CANCELLED_STATE, ddia_object=ddia)
+            action = LocalInformerAction.objects.create(local_agent=agent, prev_state=prevstate, new_state=CANCELLED_STATE, ddia_object=ddia)
         else:
-            action = SourceStructureAction.objects.create(agent=agent, prev_state=DRAFT_STATE, new_state=CANCELLED_STATE, ddia_object=ddia)    
+            action = SourceStructureAction.objects.create(agent=agent, prev_state=prevstate, new_state=CANCELLED_STATE, ddia_object=ddia)    
         notify_sourceunit_after_action(CANCELLED_STATE, ddia.ident_ddia, ddia.unit, typeDDIA)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
-        DDIAModifHistory.objects.create(history=hist, prev_value=DRAFT_STATE, new_value=CANCELLED_STATE, field='state')
+        DDIAModifHistory.objects.create(history=hist, prev_value=prevstate, new_value=CANCELLED_STATE, field='state')
         return action
 
     def verify_localinf_control(self, ddia, agent, data):
@@ -124,7 +125,7 @@ class DDIAControl:
         return action
     
     def approve_control(self, ddia, agent, data):
-        next_state = PENDING_ADMISSION_STATE if data['decision'] == 'accept' else NON_CONFORMING_STATE
+        next_state = PENDING_PUBLICATION_STATE if data['decision'] == 'accept' else NOT_APPROVED_STATE
         ddia.state = next_state
         ddia.save()
         action = NationalInformerAction.objects.create(national_agent=agent, new_state=next_state, ddia_object=ddia)
@@ -138,7 +139,10 @@ class DDIAControl:
         ddia.state = PUBLISHED_STATE
         ddia.publication_code = data['publication_code']
         ddia.save()
-        action = LocalInformerAction.objects.create(local_agent=agent, prev_state=PENDING_PUBLICATION_STATE, new_state=PUBLISHED_STATE, ddia_object=ddia)
+        if isinstance(agent, LocalAgent):
+            action = LocalInformerAction.objects.create(local_agent=agent, prev_state=PENDING_PUBLICATION_STATE, new_state=PUBLISHED_STATE, ddia_object=ddia)
+        elif isinstance(agent, NationalAgent):
+            action = NationalInformerAction.objects.create(national_agent=agent, new_state=PUBLISHED_STATE, ddia_object=ddia)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_PUBLICATION_STATE, new_value=PUBLISHED_STATE, field='state')   
         return action
@@ -220,7 +224,7 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
             if agent is None:  
                 agent, isLocalInf = LocalAgent.objects.get(user=user), True
             with transaction.atomic():
-                self.submit_control(ddia, agent, data, type_ddia, isLocalInf)
+                self.submit_control(ddia, agent, data, type_ddia, isLocalInf, request)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
@@ -250,6 +254,8 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         islocalinf = request.GET.get('is_localinf') == 'yes'
         self.check_permissions(request)
         user, data = request.user, request.data 
+        if data.get('decision') not in [ACCEPT, REJECT]:
+            return response.Response({'message': 'Error in request data decision on ddia control'}, status=status.HTTP_400_BAD_REQUEST)
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk) 
@@ -275,6 +281,8 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         from_localinf = request.GET.get('from_localinf') == 'yes'
         self.check_permissions(request)
         user, data = request.user, request.data
+        if data.get('decision') not in [ACCEPT, REJECT]:
+            return response.Response({'message': 'Error in request data decision on ddia control'}, status=status.HTTP_400_BAD_REQUEST)
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk) 
@@ -300,6 +308,8 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
     def validate(self, request: HttpRequest, type_ddia, pk, format='json'):
         self.check_permissions(request)
         user, data = request.user, request.data
+        if data.get('decision') not in [ACCEPT, REJECT]:
+            return response.Response({'message': 'Error in request data decision on ddia control'}, status=status.HTTP_400_BAD_REQUEST)
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk)         
@@ -322,6 +332,8 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
     def approve(self, request: HttpRequest, type_ddia, pk, format='json'):
         self.check_permissions(request)
         user, data = request.user, request.data
+        if data.get('decision') not in [ACCEPT, REJECT]:
+            return response.Response({'message': 'Error in request data decision on ddia control'}, status=status.HTTP_400_BAD_REQUEST)
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk)        
@@ -348,13 +360,23 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk)        
         self.check_object_permissions(request, ddia)
-        agent = LocalAgent.objects.select_related('localinformer').get(user=user)  
-        try:
-            with transaction.atomic(): 
-                self.published_control(ddia, agent, data)
-                action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-                nationalinf = action_validate.target_nationalinf
-                notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
-        except Exception as e:
-            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+        agent = LocalAgent.objects.select_related('localinformer').filter(user=user).first()  
+        if agent:
+            try:
+                with transaction.atomic(): 
+                    self.published_control(ddia, agent, data)
+                    action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+                    nationalinf = action_validate.target_nationalinf
+                    notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
+            except Exception as e:
+                return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+        else:
+            try:
+                with transaction.atomic(): 
+                    self.published_control(ddia, agent, data)
+                    # action_validate: LocalInformerAction = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+                    # localinf = action_validate.local_agent.localinformer
+                    # notify_localinformer_after_action(PUBLISHED_STATE, ddia, localinf, type_ddia)
+            except Exception as e:
+                return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)   
