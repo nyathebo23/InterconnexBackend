@@ -346,6 +346,15 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
                 if action.new_state == PENDING_PUBLICATION_STATE:
                     if not nationalinf.is_authority:
                         notify_nationalinf_ddia_nationalinf_approbation(action, type_ddia, ddia.ident_ddia, request)
+                    action_validate = LocalInformerAction.objects.select_related('local_agent__localinformer').filter(
+                        object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+                    args_func = [ddia, type_ddia, nationalinf]
+                    if action_validate:
+                        args_func.append(action_validate.local_agent.localinformer)
+                    datenotif = action.date_time + timedelta(days=2)
+                    schedule(
+                        notify_two_days_after_approbation, args=args_func, schedule_type='H', next_run = datenotif, repeats = 12 
+                    )
                 notify_nationalinformer_after_action(action.new_state, ddia, nationalinf, type_ddia)
 
         except Exception as e:
@@ -361,22 +370,31 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         ddia = DDIAType.get_object_for_this_type(id=pk)        
         self.check_object_permissions(request, ddia)
         agent = LocalAgent.objects.select_related('localinformer').filter(user=user).first()  
-        if agent:
-            try:
-                with transaction.atomic(): 
-                    self.published_control(ddia, agent, data)
-                    action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-                    nationalinf = action_validate.target_nationalinf
+        if agent is None:
+            agent = NationalAgent.objects.select_related('nationalinformer').get(user=user)
+        try:
+            with transaction.atomic(): 
+                self.published_control(ddia, agent, data)
+                action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+                if action_validate is not None:
+                    nationalinf = action_validate.target_nationalinf 
                     notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
-            except Exception as e:
-                return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
-        else:
-            try:
-                with transaction.atomic(): 
-                    self.published_control(ddia, agent, data)
-                    # action_validate: LocalInformerAction = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-                    # localinf = action_validate.local_agent.localinformer
-                    # notify_localinformer_after_action(PUBLISHED_STATE, ddia, localinf, type_ddia)
-            except Exception as e:
-                return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+                if type_ddia == 'demandenotam' and ddia.type_notam != NOTAMC:
+                    period_type = ddia.validity_period_type
+                    nbdays_before = 5
+                    datenotif = ddia.end_val_period - timedelta(days=nbdays_before)
+                    schedule(
+                        notify_unit_at_date_for_notam, args=[ddia], schedule_type='D', next_run = datenotif, repeats = 2
+                    )
+                elif type_ddia == 'demandesupp':
+                    period_type = ddia.validity_period_type
+                    nbdays_before = 5
+                    datenotif = ddia.end_val_period - timedelta(days=nbdays_before)  
+                    schedule(
+                        notify_unit_at_date_for_suppaip, args=[ddia], schedule_type='D', next_run = datenotif, repeats = 2
+                    )
+
+        except Exception as e:
+            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+ 
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)   

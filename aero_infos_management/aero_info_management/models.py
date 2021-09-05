@@ -51,6 +51,7 @@ class Notification(models.Model):
     ref_ddia = models.CharField(max_length=20)   
     new_ddia_state = models.CharField(max_length=50, choices=STATES)
     read = models.BooleanField(default=False)
+    is_valid = models.BooleanField(default=True)
     date_time = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ['-date_time']
@@ -178,13 +179,13 @@ class DemandeNOTAM(DDIA):
     range_action = models.CharField(max_length=120, blank=True)
     type_notam = models.CharField(max_length=10, choices=TYPES_NOTAM, default=NOTAMN)
     coords = models.CharField(max_length=120, blank=True)
-    validity_period_type = models.CharField(max_length=15, choices=PERIOD_TYPES, default=PLANNED)
+    validity_period_type = models.CharField(max_length=15, choices=PERIOD_TYPES, blank=True, null=True)
     code_notam_replaceorcancel = models.CharField(max_length=80, null=True, blank=True)
-    start_val_period = models.DateTimeField()
-    end_val_period = models.DateTimeField()
+    start_val_period = models.DateTimeField(blank=True, null=True)
+    end_val_period = models.DateTimeField(blank=True, null=True)
     daily_freq_start = models.TimeField(blank=True, null=True)
     daily_freq_end = models.TimeField(blank=True, null=True)
-    daily_freq_type = models.CharField(max_length=30, choices=PERIOD_TYPES, default=PLANNED)
+    daily_freq_type = models.CharField(max_length=30, choices=PERIOD_TYPES)
     lower_vertical_limit = models.CharField(max_length=50, blank=True)
     upper_vertical_limit = models.CharField(max_length=50, blank=True)
     descriptive_text = models.TextField(blank=True)
@@ -192,7 +193,7 @@ class DemandeNOTAM(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='notam', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='notam', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='notam',  content_type_field='ddia_type')
-    referral = GenericRelation(RequestReferral, related_query_name='notam',  content_type_field='ddia_type', object_id_field='id_object')
+    request_referrals = GenericRelation(RequestReferral, related_query_name='notam',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='notam', content_type_field='ddia_type', object_id_field='id_object')
 
 
@@ -208,7 +209,7 @@ class DemandeSUPP(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='suppaip', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='suppaip', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='suppaip',  content_type_field='ddia_type')
-    referral = GenericRelation(RequestReferral, related_query_name='suppaip',  content_type_field='ddia_type', object_id_field='id_object')
+    request_referrals = GenericRelation(RequestReferral, related_query_name='suppaip',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='suppaip', content_type_field='ddia_type', object_id_field='id_object')
 
 class DemandeAIC(DDIA):
@@ -219,7 +220,7 @@ class DemandeAIC(DDIA):
     national_inf_actions = GenericRelation(NationalInformerAction, related_query_name='aic', content_type_field='ddia_type')
     local_inf_actions = GenericRelation(LocalInformerAction, related_query_name='aic', content_type_field='ddia_type')
     sourcestruct_actions = GenericRelation(SourceStructureAction, related_query_name='aic',  content_type_field='ddia_type')
-    referral = GenericRelation(RequestReferral, related_query_name='aic',  content_type_field='ddia_type', object_id_field='id_object')
+    request_referrals = GenericRelation(RequestReferral, related_query_name='aic',  content_type_field='ddia_type', object_id_field='id_object')
     history = GenericRelation(DDIAHistory, related_query_name='aic', content_type_field='ddia_type', object_id_field='id_object')
 
 

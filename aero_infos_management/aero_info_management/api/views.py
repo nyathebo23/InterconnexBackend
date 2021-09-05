@@ -505,3 +505,8 @@ def delete_user(request, pk):
         user.delete()
         return response.Response({"message": "User with Id {} deleted successfully".format(id) }, status=status.HTTP_204_NO_CONTENT)
     return response.Response("No User object with this user's id found", status=status.HTTP_404_NOT_FOUND)   
+
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer

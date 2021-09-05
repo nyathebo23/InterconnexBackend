@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-d3!pv-lj%+!!a#+gelw8m&or9e8#=x8!ih6e4zqx5d^)%i^xe6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.43.73', '127.0.0.1']
+ALLOWED_HOSTS = ['192.168.43.73', '127.0.0.1', '192.168.137.1']
 
 
 # Application definition
@@ -46,8 +46,10 @@ INSTALLED_APPS = [
     # 'rest_framework_simplejwt.authentication.JWTAuthentication',
     'aero_info_management',
     'inline_static',
+    'django_q'
 
 ]
+
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -140,6 +142,22 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=600),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=60),
+}
+
+Q_CLUSTER = {
+    'name': 'default',
+    'recycle': 500,
+    'timeout': 60,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Django Q',
+    'redis': {
+        'host': '127.0.0.1',
+        'port': 6379,
+        'db': 0, 
+    }
 }
 
 # Internationalization

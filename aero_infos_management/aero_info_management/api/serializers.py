@@ -118,9 +118,13 @@ class LocalInformerSerializerExtend(serializers.ModelSerializer):
         fields = '__all__'
     
 class AttachmentSerializer(serializers.ModelSerializer):
+    name = serializers.SerializerMethodField(read_only=True)
     class Meta:
         model = Attachment
-        fields = ['file']
+        fields = ['file', 'name']
+    
+    def get_name(self, obj):
+        return obj.file.name
 
 # class LocalInformerSerializerForHistory(serializers.ModelSerializer):
 #     aerodrome_name = serializers.SerializerMethodField(read_only=True)

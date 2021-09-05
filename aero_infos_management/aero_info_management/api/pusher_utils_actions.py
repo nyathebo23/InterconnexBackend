@@ -1,5 +1,5 @@
 from os import error
-
+from datetime import datetime, timedelta
 from rest_framework import response, status
 from .permissions import CanInitiateDDIA, IsAuthorityLocalInformer, IsNationalInformer, IsSourceCommander, IsVerifier
 from django.http.request import HttpRequest
@@ -8,6 +8,7 @@ from ..models import Aerodrome, LocalInformer, LocalInformerAction, NationalInfo
 from .serializers import *
 import pusher
 from rest_framework.decorators import api_view, permission_classes, action
+from django_q.tasks import schedule
 
 pusher_client = pusher.Pusher(
   app_id='1249385',
@@ -49,6 +50,10 @@ def notify_sourceverifier_ddia_submission(actionObj, typeDDIA: str, aerodrome: A
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(event='ddia-creation', ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_sourcestructure_ddia_submission(actionObj, typeDDIA: str, aerodrome: Aerodrome, refDDIA: str, request):
     notification = Notification.objects.create(receiver_object=aerodrome, event='ddia-reception-verifsubmission', 
@@ -62,6 +67,10 @@ def notify_sourcestructure_ddia_submission(actionObj, typeDDIA: str, aerodrome: 
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(event='ddia-creation', ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_sourcestructure_ddia_verification(actionObj, typeDDIA: str, aerodrome: Aerodrome, refDDIA: str, request):
     notification = Notification.objects.create(receiver_object=aerodrome, event='ddia-reception-verification', 
@@ -75,6 +84,10 @@ def notify_sourcestructure_ddia_verification(actionObj, typeDDIA: str, aerodrome
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(event='ddia-submission', ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_localinf_ddia_sourcecommand_admission(actionObj, typeDDIA: str, localinformer: LocalInformer, refDDIA: str, request):
     notification = Notification.objects.create(receiver_object=localinformer, event='ddia-reception-admission', 
@@ -85,6 +98,11 @@ def notify_localinf_ddia_sourcecommand_admission(actionObj, typeDDIA: str, local
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(Q(event='ddia-reception-verifsubmission') | Q(event='ddia-reception-verification') 
+    , ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_nationalinf_ddia_sourcecommand_admission(actionObj, typeDDIA: str, nationalinformer: NationalInformer, refDDIA: str, request):
     notification = Notification.objects.create(receiver_object=nationalinformer, event='ddia-reception-admission', 
@@ -95,6 +113,10 @@ def notify_nationalinf_ddia_sourcecommand_admission(actionObj, typeDDIA: str, na
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(Q(event='ddia-reception-verifsubmission') | Q(event='ddia-reception-verification') , ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_nationalinf_ddia_nationalinf_approbation(actionObj, typeDDIA: str, refDDIA: str, request):
     nationalinformer = NationalInformer.objects.get(is_authority=True)
@@ -106,6 +128,10 @@ def notify_nationalinf_ddia_nationalinf_approbation(actionObj, typeDDIA: str, re
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(event='ddia-reception-admission', ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_nationalinf_ddia_localinf_validation(actionObj, typeDDIA: str, refDDIA: str, request):
     nationalinformer = NationalInformer.objects.get(is_authority=True)
@@ -117,6 +143,10 @@ def notify_nationalinf_ddia_localinf_validation(actionObj, typeDDIA: str, refDDI
         'data': data,
         'notification': NotificationSerializer(notification).data
     })
+    notif = Notification.objects.filter(event='ddia-reception-admission', ref_ddia=refDDIA).first()
+    if notif is not None:
+        notif.is_valid = False
+        notif.save()
 
 def notify_sourceunit_after_action(next_state: str, refDDIA: str, unit: Unit, typeDDIA: str):
     notification = Notification.objects.create(receiver_object=unit, event='ddia-state-change', 
@@ -179,6 +209,39 @@ def notify_nationalinformer_after_action(next_state: str, ddia, nationalinf: Nat
             'notification': NotificationSerializer(notification).data
         })
 
+def notify_unit_at_date_for_notam(notam: DemandeNOTAM):
+    unit = notam.unit
+    notification = Notification.objects.create(receiver_object=unit, event='ddia-validity-exp', 
+    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type='NOTAM', ref_ddia=notam.ident_ddia)
+    pusher_client.trigger('unit'+str(unit.id), 'notam-validity-exp', data = {
+        'notification': NotificationSerializer(notification).data,
+        'expiration_date': notam.end_val_period
+    })    
+
+def notify_unit_at_date_for_suppaip(suppaip: DemandeSUPP):
+    unit = suppaip.unit
+    notification = Notification.objects.create(receiver_object=unit, event='ddia-validity-exp', 
+    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type='SUPP AIP', ref_ddia=suppaip.ident_ddia)
+    pusher_client.trigger('unit'+str(unit.id), 'suppaip-validity-exp', data = {
+        'notification': NotificationSerializer(notification).data,
+        'expiration_date': suppaip.end_val_period
+    })   
+
+def notify_two_days_after_approbation(ddia, type_ddia, nationalinformer, localinformer=None):
+    channels = ['inf-nat'+nationalinformer.id]
+    if localinformer is not None:
+        notification = Notification.objects.create(receiver_object=localinformer, event='ddia-must-be-published', 
+        new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type=typeDDIADict.get(type_ddia), ref_ddia=ddia.ident_ddia)
+        channels.append('inf-loc'+localinformer.id)
+    notification = Notification.objects.create(receiver_object=ddia.unit, event='ddia-must-be-published', 
+    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type=typeDDIADict.get(type_ddia), ref_ddia=ddia.ident_ddia)
+    pusher_client.trigger(channels, 'ddia-must-be-published', data = {
+        'notification': NotificationSerializer(notification).data
+    })
+
+
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanInitiateDDIA])
 def get_notifications_sourceunit(request: HttpRequest):
@@ -188,7 +251,7 @@ def get_notifications_sourceunit(request: HttpRequest):
     else:
         agent = LocalAgent.objects.select_related('localinformer__unit').get(user=request.user)
         unit = agent.localinformer.unit
-    notifications = Notification.objects.filter(unit=unit).filter(Q(event='ddia-creation'))
+    notifications = Notification.objects.filter(unit=unit, is_valid=True).filter(Q(event='ddia-creation'))
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -201,7 +264,7 @@ def get_notifications_sourceverifier(request: HttpRequest):
     else:
         agent = LocalAgent.objects.select_related('localinformer__aerodrome').get(user=request.user)
         aerodrome = agent.localinformer.aerodrome
-    notifications = Notification.objects.filter(aerodrome=aerodrome, event='ddia-reception-submission')
+    notifications = Notification.objects.filter(aerodrome=aerodrome, is_valid=True, event='ddia-reception-submission')
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -210,7 +273,7 @@ def get_notifications_sourceverifier(request: HttpRequest):
 def get_notifications_sourcecommand(request: HttpRequest):
     agent = Agent.objects.select_related('aerodrome').filter(user=request.user).first()
     aerodrome = agent.aerodrome
-    notifications = Notification.objects.filter(aerodrome=aerodrome).filter(Q(event='ddia-reception-verifsubmission') | Q(event='ddia-reception-verification'))
+    notifications = Notification.objects.filter(aerodrome=aerodrome, is_valid=True).filter(Q(event='ddia-reception-verifsubmission') | Q(event='ddia-reception-verification'))
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -219,7 +282,7 @@ def get_notifications_sourcecommand(request: HttpRequest):
 def get_notifications_nationalinformer(request: HttpRequest):
     agent = NationalAgent.objects.select_related('nationalinformer').filter(user=request.user).first()
     nationalinf = agent.nationalinformer
-    notifications = Notification.objects.filter(nationalinformer=nationalinf).filter(Q(event='ddia-signal-approbation') | Q(event='ddia-reception-validation'))
+    notifications = Notification.objects.filter(nationalinformer=nationalinf, is_valid=True).filter(Q(event='ddia-signal-approbation') | Q(event='ddia-reception-validation') | Q(event='ddia-reception-admission'))
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 
@@ -228,7 +291,7 @@ def get_notifications_nationalinformer(request: HttpRequest):
 def get_notifications_localinformer(request: HttpRequest):
     agent = LocalAgent.objects.select_related('localinformer').filter(user=request.user).first()
     localinf = agent.localinformer
-    notifications = Notification.objects.filter(localinformer=localinf, event='ddia-reception-admission')
+    notifications = Notification.objects.filter(localinformer=localinf, is_valid=True, event='ddia-reception-admission')
     data = NotificationSerializer(notifications, many=True).data
     return response.Response(data=data, status=status.HTTP_200_OK)
 

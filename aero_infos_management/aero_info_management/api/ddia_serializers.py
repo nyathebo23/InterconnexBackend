@@ -30,14 +30,14 @@ def make_identddia_property(aerodrome: Aerodrome, prefix: str):
             return prefix+'-'+locationInd + '-'+ str(today.year) + '-' + str(inc).zfill(4)
         last = DemandeAIC.objects.get(id=histor.id_object)
     elif prefix == 'NOT':
-        histor = DDIAHistory.objects.filter(ddia_type=aic_type, type_action=CREATE_ACTION).last()
+        histor = DDIAHistory.objects.filter(ddia_type=notam_type, type_action=CREATE_ACTION).last()
         if histor is None:
             return prefix+'-'+locationInd + '-'+ str(today.year) + '-' + str(inc).zfill(4)
         histor = DDIAHistory.objects.filter(ddia_type=notam_type, type_action=CREATE_ACTION).last()
         last = DemandeNOTAM.objects.get(id=histor.id_object)
 
     elif prefix == 'SUP':
-        histor = DDIAHistory.objects.filter(ddia_type=aic_type, type_action=CREATE_ACTION).last()
+        histor = DDIAHistory.objects.filter(ddia_type=suppaip_type, type_action=CREATE_ACTION).last()
         if histor is None:
             return prefix+'-'+locationInd + '-'+ str(today.year) + '-' + str(inc).zfill(4)
         last = DemandeSUPP.objects.get(id=histor.id_object)
@@ -52,7 +52,17 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DemandeNOTAM
         exclude = ['initiator', 'unit', 'location_indicator', 'state']
-
+        extra_kwargs = {         
+            'daily_freq_start': {
+                'required': False
+            },       
+            'daily_freq_end': {
+                'required': False
+            },     
+            'daily_freq_type': {
+                'required': False
+            },   
+        }
     def create(self, validated_data):
         request = self.context.get("request")
         user = request.user
@@ -255,7 +265,7 @@ class DemandeNOTAMSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
-    request_referral = RequestReferralSerializer(read_only=True, many=False)
+    request_referrals = RequestReferralSerializer(read_only=True, many=True)
 
     class Meta:
         model = DemandeNOTAM
@@ -267,7 +277,7 @@ class DemandeSUPPSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
-    request_referral = RequestReferralSerializer(read_only=True, many=False)
+    request_referrals = RequestReferralSerializer(read_only=True, many=True)
 
     class Meta:
         model = DemandeSUPP
@@ -279,7 +289,7 @@ class DemandeAICSerializer(serializers.ModelSerializer):
     attachments = AttachmentSerializer(read_only=True, many=True)
     unit = UnitSerializer(read_only=True)
     history = DDIAHistorySerializer(read_only=True, many=True)
-    request_referral = RequestReferralSerializer(read_only=True, many=False)
+    request_referrals = RequestReferralSerializer(read_only=True, many=True)
 
     class Meta:
         model = DemandeAIC

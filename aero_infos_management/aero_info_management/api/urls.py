@@ -33,6 +33,7 @@ router.register(r'national-informers', NationalInformerViewSet)
 urlpatterns = [
     # path('source/listDDIA/<str:type_ddia>', )
     path('delete-user/<int:pk>', delete_user, name='deleteuser'),
+    path('users-list/', UserListView.as_view(), name='users-list'),
     path('agent-infos/', get_agent_infos, name='agent-infos'),
     path('nationalinf-ddia-target/<str:type_ddia>/<int:id>', get_target_nationalinformer, name='nationalinf-ddia-target'),
     path('localagent-infos/', get_localagent_infos, name='localagent-infos'),
