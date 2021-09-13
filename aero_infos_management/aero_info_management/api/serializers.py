@@ -276,7 +276,7 @@ class NationalInformerActionSerializer(serializers.ModelSerializer):
 
 
 class AerodromeExtendSerializer(serializers.ModelSerializer):
-    localinformer = LocalInformerSerializer(read_only=True)
+    localinformer = LocalInformerSerializer(read_only=True, many=False)
     units = UnitReducedSerializer(read_only=True, many=True)
     class Meta:
         model = Aerodrome

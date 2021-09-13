@@ -134,7 +134,7 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class DemandeSUPPForCreateUpdateSerializer(serializers.ModelSerializer):
-    attachments = AttachmentSerializer(many=True)
+    attachments = AttachmentSerializer(many=True, required=False)
     class Meta:
         model = DemandeSUPP
         exclude = ['initiator', 'unit', 'location_indicator', 'state']
@@ -204,7 +204,7 @@ class DemandeSUPPForCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class DemandeAICForCreateUpdateSerializer(serializers.ModelSerializer):
-    attachments = AttachmentSerializer(many=True)
+    attachments = AttachmentSerializer(many=True, required=False)
     class Meta:
         model = DemandeAIC
         exclude = ['initiator', 'unit', 'location_indicator', 'state']

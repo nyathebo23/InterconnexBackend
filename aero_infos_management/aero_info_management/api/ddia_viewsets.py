@@ -15,6 +15,7 @@ from .ddia_serializers import *
 from ..constants import *
 from django.db.models import Q
 
+
 class DDIAGenericViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         permission_classes = []
@@ -51,11 +52,14 @@ class DDIAControl:
             action = LocalInformerAction.objects.create(local_agent=agent, prev_state=DRAFT_STATE, new_state=next_state, 
             ddia_object=ddia, target_nationalinf=nationalinf)
             notify_sourcestructure_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
-            notify_sourceverifier_after_action(next_state, ddia, aerodrome, typeDDIA)
+            # notify_sourceverifier_after_action(next_state, ddia, aerodrome, typeDDIA)
         else:
             action = SourceStructureAction.objects.create(agent=agent, prev_state=DRAFT_STATE, new_state=next_state, ddia_object=ddia)
-            notify_sourceverifier_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
-            notify_sourceunit_after_action(next_state, ddia.ident_ddia, ddia.unit, typeDDIA)
+            if next_state == PENDING_ADMISSION_STATE:
+                notify_sourcestructure_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
+            elif next_state == PENDING_VERIFICATION_STATE:
+                notify_sourceverifier_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
+        notify_sourceunit_after_action(next_state, ddia.ident_ddia, ddia.unit, typeDDIA)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=DRAFT_STATE, new_value=next_state, field='state') 
 
@@ -393,7 +397,6 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
                     schedule(
                         notify_unit_at_date_for_suppaip, args=[ddia], schedule_type='D', next_run = datenotif, repeats = 2
                     )
-
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
  

@@ -79,7 +79,8 @@ class CanReadDDIA(permissions.BasePermission):
                 isInUnitInitiator = localagent.localinformer.unit == obj.unit
                 isAgentVerifier = localagent.localinformer.aerodrome == obj.unit.aerodrome
                 return isInUnitInitiator or (isAgentVerifier  and obj.state != DRAFT_STATE)
-            return agent.aerodrome == obj.unit.aerodrome and obj.state != DRAFT_STATE
+            isInUnitInitiator = agent.unit == obj.unit
+            return isInUnitInitiator or (agent.aerodrome == obj.unit.aerodrome and obj.state != DRAFT_STATE)
         elif user.role == SOURCE_STRUCTURE:
             agent = Agent.objects.select_related('aerodrome').get(user=user)
             return agent.aerodrome == obj.unit.aerodrome and obj.state not in [DRAFT_STATE, PENDING_VERIFICATION_STATE]

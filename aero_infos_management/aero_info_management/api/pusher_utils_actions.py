@@ -36,7 +36,7 @@ def notify_sourceunit_ddia_creation(ddiaObj, typeDDIA: str, request):
     elif typeDDIA == 'demandeaic':
         data = DemandeAICItemListSerializer(ddiaObj, context={'request': request}).data
     pusher_client.trigger('unit'+str(unit.id), 'ddia-creation', data={
-        'typeDDIA': typeDDIA,
+        'user_id': request.user.id,
         'data': data,
         'notification': NotificationSerializer(notification).data
     })

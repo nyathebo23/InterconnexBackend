@@ -79,7 +79,7 @@ class Unit(models.Model):
 
 class LocalInformer(models.Model):
     name = models.CharField(max_length=50)
-    aerodrome = models.ForeignKey(Aerodrome, on_delete=models.CASCADE, blank=True, null=True, related_name='localinformer')
+    aerodrome = models.OneToOneField(Aerodrome, on_delete=models.CASCADE, blank=True, null=True, related_name='localinformer')
     unit = models.OneToOneField(Unit, on_delete=models.SET_NULL, blank=True, null=True)
     notifications = GenericRelation(Notification, related_query_name='localinformer', content_type_field='receiver_type', object_id_field='receiver_id')
 

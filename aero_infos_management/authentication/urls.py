@@ -5,6 +5,7 @@ from rest_framework import routers
 from django.conf.urls import url
 from .views import *
 from .verification import *
+from django.conf.urls.static import static
 
 router = routers.DefaultRouter()
 router.register(r'user/email', ChangeEmailViewset, basename="email")
@@ -17,4 +18,4 @@ urlpatterns = [
     path('', include(router.urls)),
     path('user/token/refresh/', jwt_views.TokenRefreshView.as_view(), name='token_refresh'),
     path('user/signup/', SignUp.as_view(), name="create_user"),
-]
+] + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

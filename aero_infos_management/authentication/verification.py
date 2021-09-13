@@ -167,6 +167,7 @@ class PasswordResetViewset(viewsets.ViewSet):
         user = User.objects.get(email=email)
         send_password_reset_mail(user=user, request=request)
         return Response({
+            "user_id": user.id,
             "message": "Validation Code Sent!. Please check your email"
         }, status=status.HTTP_200_OK)
 
