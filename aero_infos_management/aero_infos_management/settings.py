@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-d3!pv-lj%+!!a#+gelw8m&or9e8#=x8!ih6e4zqx5d^)%i^xe6
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.43.73', '127.0.0.1', '192.168.137.1']
+ALLOWED_HOSTS = ['192.168.43.73', '127.0.0.1', '192.168.137.1', '192.168.24.103']
 
 
 # Application definition
@@ -46,7 +46,10 @@ INSTALLED_APPS = [
     # 'rest_framework_simplejwt.authentication.JWTAuthentication',
     'aero_info_management',
     'inline_static',
-    'django_q'
+    'safedelete',
+    'django_celery_beat',
+    'django_celery_results',
+    'django_apscheduler'
 ]
 
 
@@ -93,7 +96,15 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    },
+    # 'default': {
+    #     'ENGINE': 'django.db.backends.postgresql_psycopg2',
+    #     'NAME': 'aero_infos_management',
+    #     'USER': 'aero_infos_managementuser',
+    #     'PASSWORD': 'Franck23*',
+    #     'HOST': 'localhost',
+    #     'PORT': '5432',
+    # }
 }
 
 
@@ -145,14 +156,13 @@ SIMPLE_JWT = {
 }
 
 Q_CLUSTER = {
-    'name': 'default',
+    'name': 'aero_info_management',
     'recycle': 500,
     'timeout': 60,
     'compress': True,
     'save_limit': 250,
     'queue_limit': 500,
     'cpu_affinity': 1,
-    'label': 'Django Q',
     'redis': {
         'host': '127.0.0.1',
         'port': 6379,
@@ -213,3 +223,5 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ORIGIN_ALLOW_ALL=True
 
 AUTH_USER_MODEL = "authentication.CustomUser"
+
+CELERY_RESULT_BACKEND = "django-db"

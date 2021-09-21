@@ -8,7 +8,6 @@ from ..models import Aerodrome, LocalInformer, LocalInformerAction, NationalInfo
 from .serializers import *
 import pusher
 from rest_framework.decorators import api_view, permission_classes, action
-from django_q.tasks import schedule
 
 pusher_client = pusher.Pusher(
   app_id='1249385',
@@ -209,38 +208,9 @@ def notify_nationalinformer_after_action(next_state: str, ddia, nationalinf: Nat
             'notification': NotificationSerializer(notification).data
         })
 
-def notify_unit_at_date_for_notam(notam: DemandeNOTAM):
-    unit = notam.unit
-    notification = Notification.objects.create(receiver_object=unit, event='ddia-validity-exp', 
-    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type='NOTAM', ref_ddia=notam.ident_ddia)
-    pusher_client.trigger('unit'+str(unit.id), 'notam-validity-exp', data = {
-        'notification': NotificationSerializer(notification).data,
-        'expiration_date': notam.end_val_period
-    })    
 
-def notify_unit_at_date_for_suppaip(suppaip: DemandeSUPP):
-    unit = suppaip.unit
-    notification = Notification.objects.create(receiver_object=unit, event='ddia-validity-exp', 
-    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type='SUPP AIP', ref_ddia=suppaip.ident_ddia)
-    pusher_client.trigger('unit'+str(unit.id), 'suppaip-validity-exp', data = {
-        'notification': NotificationSerializer(notification).data,
-        'expiration_date': suppaip.end_val_period
-    })   
-
-def notify_two_days_after_approbation(ddia, type_ddia, nationalinformer, localinformer=None):
-    channels = ['inf-nat'+nationalinformer.id]
-    if localinformer is not None:
-        notification = Notification.objects.create(receiver_object=localinformer, event='ddia-must-be-published', 
-        new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type=typeDDIADict.get(type_ddia), ref_ddia=ddia.ident_ddia)
-        channels.append('inf-loc'+localinformer.id)
-    notification = Notification.objects.create(receiver_object=ddia.unit, event='ddia-must-be-published', 
-    new_ddia_state=PENDING_PUBLICATION_STATE, ddia_type=typeDDIADict.get(type_ddia), ref_ddia=ddia.ident_ddia)
-    pusher_client.trigger(channels, 'ddia-must-be-published', data = {
-        'notification': NotificationSerializer(notification).data
-    })
-
-
-
+def notif_test():
+    print('scheduler ok')
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, CanInitiateDDIA])

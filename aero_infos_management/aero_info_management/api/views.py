@@ -35,6 +35,8 @@ def render_pagination_ddia_queryset(queryset: QuerySet, request: HttpRequest, st
     queryfiltered = queryset if state == 'all' else queryset.filter(state=state)
     queryfiltered = queryfiltered if date_order == 'ascendingDate' else list(reversed(queryfiltered))
     paginator = Paginator(queryfiltered, PAGE_DDIA_LIST_SIZE)
+    print(len(queryfiltered), paginator.count)
+
     page = request.GET.get('page')
     try:
         result_page = paginator.page(page)
@@ -117,7 +119,8 @@ def listDDIA_inwaiting_for_nationalinf_view(request, type_ddia):
             target_nationalinf=nationalinf
         )
     validations = validations if date_order == 'ascendingDate' else list(reversed(validations))
-    return render_pagination_localinf_response(validations, request)
+    data = LocalInformerActionSerializer(validations, many=True, context={'request': request}).data
+    return response.Response({'counts': None, 'results': data}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAuthorityLocalInformer])
@@ -135,8 +138,9 @@ def listDDIA_inwaiting_for_authoritylocalinformer_view(request, type_ddia):
          | Q(aic__state=PENDING_VALIDATION_STATE) | Q(suppaip__state=PENDING_VALIDATION_STATE))
 
     actionsagent = actionsagent if date_order == 'ascendingDate' else list(reversed(actionsagent))       
-    return render_pagination_aerodromeagent_response(actionsagent, request)
-
+    data = SourceStructureActionSerializer(actionsagent, many=True, context={'request': request}).data
+    return response.Response({'counts': None, 'results': data}, status=status.HTTP_200_OK)
+   
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsSourceCommander])
@@ -160,7 +164,8 @@ def listDDIA_inwaiting_for_sourcestructure_view(request, type_ddia):
             | Q(suppaip__unit__aerodrome=aerodrome, suppaip__state=PENDING_ADMISSION_STATE), 
             )
         actionsagent = actionsagent if date_order == 'ascendingDate' else list(reversed(actionsagent))
-        return render_pagination_localinf_response(actionsagent, request)
+        data = SourceStructureActionSerializer(actionsagent, many=True, context={'request': request}).data
+        return response.Response({'counts': None, 'results': data}, status=status.HTTP_200_OK)
     else:
         if type_ddia == 'notam':
             actionsagent = SourceStructureAction.objects.filter(notam__unit__aerodrome=aerodrome, notam__state=PENDING_ADMISSION_STATE)
@@ -175,7 +180,8 @@ def listDDIA_inwaiting_for_sourcestructure_view(request, type_ddia):
             | Q(suppaip__unit__aerodrome=aerodrome, suppaip__state=PENDING_ADMISSION_STATE), 
             )
         actionsagent = actionsagent if date_order == 'ascendingDate' else list(reversed(actionsagent))
-        return render_pagination_aerodromeagent_response(actionsagent, request)
+        data = LocalInformerActionSerializer(actionsagent, many=True, context={'request': request}).data
+        return response.Response({'counts': None, 'results': data}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsVerifier])
@@ -201,7 +207,8 @@ def listDDIA_inwaiting_for_sourceverifier_view(request, type_ddia):
          | Q(suppaip__unit__aerodrome=aerodrome,  suppaip__state=PENDING_VERIFICATION_STATE), 
         )
     actionsagent = actionsagent if date_order == 'ascendingDate' else list(reversed(actionsagent))
-    return render_pagination_aerodromeagent_response(actionsagent, request)
+    data = SourceStructureActionSerializer(actionsagent, many=True, context={'request': request}).data
+    return response.Response({'counts': None, 'results': data}, status=status.HTTP_200_OK)
 
 @api_view(['GET'])
 def listDDIA_inwaiting_for_initiator_view(request):
@@ -232,20 +239,20 @@ def listDDIA_processed_for_nationalinf_view(request, type_ddia):
     nationalinf = national_agent.nationalinformer
     approbations = []
     if type_ddia == 'notam':
-        approbations = NationalInformerAction.objects.filter(ddia_type=notam_type)
+        approbations = NationalInformerAction.objects.filter(ddia_type=notam_type, prev_state=PENDING_APPROVAL_STATE)
         approbations = approbations if state == 'all' else approbations.filter(notam__state=state) 
     elif type_ddia == 'suppaip':
-        approbations = NationalInformerAction.objects.filter(ddia_type=suppaip_type)
+        approbations = NationalInformerAction.objects.filter(ddia_type=suppaip_type, prev_state=PENDING_APPROVAL_STATE)
         approbations = approbations if state == 'all' else approbations.filter(suppaip__state=state) 
     elif type_ddia == 'aic':
-        approbations = NationalInformerAction.objects.filter(ddia_type=aic_type)
+        approbations = NationalInformerAction.objects.filter(ddia_type=aic_type, prev_state=PENDING_APPROVAL_STATE)
         approbations = approbations if state == 'all' else approbations.filter(aic__state=state) 
     else:
         approbations = NationalInformerAction.objects.all()
         if not nationalinf.is_authority:
             approbations = approbations.filter(national_agent__nationalinformer=nationalinf)
     approbations = approbations if state == 'all' else approbations.filter(
-       Q(notam__state=state) | Q(suppaip__state=state) | Q(aic__state=state) 
+       Q(notam__state=state) | Q(suppaip__state=state) | Q(aic__state=state), prev_state=PENDING_APPROVAL_STATE
     ) 
     approbations = approbations if date_order == 'ascendingDate' else list(reversed(approbations))
     return render_pagination_nationalinf_response(approbations, request)
@@ -259,13 +266,13 @@ def listDDIA_processed_for_authoritylocalinformer_view(request, type_ddia):
     localinf = local_agent.localinformer
     validations = []
     if type_ddia == 'notam':
-        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=notam_type)
+        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=notam_type, prev_state=PENDING_VALIDATION_STATE)
         validations = validations if state == 'all' else validations.filter(notam__state=state)
     elif type_ddia == 'suppaip':
-        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=suppaip_type)
+        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=suppaip_type, prev_state=PENDING_VALIDATION_STATE)
         validations = validations if state == 'all' else validations.filter(suppaip__state=state)
     elif type_ddia == 'aic':
-        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=aic_type)
+        validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf, ddia_type=aic_type, prev_state=PENDING_VALIDATION_STATE)
         validations = validations if state == 'all' else validations.filter(aic__state=state)
     else:
         validations = LocalInformerAction.objects.filter(local_agent__localinformer=localinf,  prev_state=PENDING_VALIDATION_STATE)

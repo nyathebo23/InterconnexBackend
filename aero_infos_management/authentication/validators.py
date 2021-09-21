@@ -172,8 +172,7 @@ class RequestChangeEmailValidator(serializers.Serializer):
         user = User.objects.filter(id=user_id)
         if not user.exists():
             raise serializers.ValidationError({'id':
-                                               "user not found"}
-                                              )
+                                               "user not found"})
         confirm_token = ConfirmToken.objects.filter(
             user__id=user_id, kind=EMAIL_TOKEN)
         if confirm_token.exists():

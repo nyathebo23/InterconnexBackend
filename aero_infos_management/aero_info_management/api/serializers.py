@@ -9,6 +9,8 @@ from datetime import datetime, date, tzinfo
 from django.contrib.auth import get_user_model
 import pytz
 
+
+
 utc=pytz.UTC
 
 User = get_user_model()
@@ -20,7 +22,7 @@ aic_type = ContentType.objects.get_for_model(DemandeAIC)
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email' ,'first_name', 'last_name', 'sex', 'role', 'function', 'quality', 'is_staff']
+        fields = ['id', 'email' ,'first_name', 'last_name', 'sex', 'role', 'function', 'quality', 'is_staff', 'is_active']
 
 class LocalInformerSerializer(serializers.ModelSerializer):
     class Meta:

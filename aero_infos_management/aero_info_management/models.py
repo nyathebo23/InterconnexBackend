@@ -8,6 +8,8 @@ from django.db.models.fields.json import DataContains
 from .constants import *
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
+from safedelete.models import SafeDeleteModel
+from safedelete.models import HARD_DELETE_NOCASCADE
 
 User = get_user_model()
 
@@ -57,7 +59,9 @@ class Notification(models.Model):
         ordering = ['-date_time']
 
 
-class Aerodrome(models.Model):
+class Aerodrome(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     name = models.CharField(max_length=80, unique=True)
     location_ind = models.CharField(max_length=10, unique=True)
     is_conceded = models.BooleanField(default=False)
@@ -65,7 +69,9 @@ class Aerodrome(models.Model):
     def __str__(self) -> str:
         return self.name
 
-class Unit(models.Model):
+class Unit(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=70)
     phone_number = models.CharField(max_length=20, unique=True)
@@ -77,7 +83,9 @@ class Unit(models.Model):
     def __str__(self) -> str:
         return self.name + " "+ self.aerodrome.name
 
-class LocalInformer(models.Model):
+class LocalInformer(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     name = models.CharField(max_length=50)
     aerodrome = models.OneToOneField(Aerodrome, on_delete=models.CASCADE, blank=True, null=True, related_name='localinformer')
     unit = models.OneToOneField(Unit, on_delete=models.SET_NULL, blank=True, null=True)
@@ -86,7 +94,9 @@ class LocalInformer(models.Model):
     def __str__(self) -> str:
         return self.name
 
-class NationalInformer(models.Model):
+class NationalInformer(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     name = models.CharField(max_length=50)
     email = models.EmailField(default='segc@ccaa.aero')
     is_authority = models.BooleanField(default=False)
@@ -94,7 +104,9 @@ class NationalInformer(models.Model):
     def __str__(self) -> str:
         return self.name
 
-class Agent(models.Model):
+class Agent(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, blank=True, null=True)
     aerodrome = models.ForeignKey(Aerodrome, on_delete=models.SET_NULL, blank=True, null=True)
@@ -103,7 +115,9 @@ class Agent(models.Model):
     def __str__(self) -> str:
         return self.user.username+ ' - '+ self.user.role
 
-class LocalAgent(models.Model):
+class LocalAgent(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     localinformer = models.ForeignKey(LocalInformer, on_delete=models.DO_NOTHING)
     history = GenericRelation(DDIAHistory, related_query_name='local_agent', content_type_field='agent_type', object_id_field='agent_id')
@@ -111,7 +125,9 @@ class LocalAgent(models.Model):
     def __str__(self) -> str:
         return self.user.username+ ' - '+ self.user.role
 
-class NationalAgent(models.Model):
+class NationalAgent(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     nationalinformer = models.ForeignKey(NationalInformer, on_delete=models.DO_NOTHING)
     history = GenericRelation(DDIAHistory, related_query_name='national_agent', content_type_field='agent_type', object_id_field='agent_id')
@@ -119,6 +135,7 @@ class NationalAgent(models.Model):
     def __str__(self) -> str:
         return self.user.username+ ' - '+ self.user.role
     
+
 class DDIA(models.Model):
     initiator = models.ForeignKey(User, on_delete=models.DO_NOTHING)
     ident_ddia = models.CharField(unique=True, max_length=20, blank=True)
@@ -132,14 +149,18 @@ class DDIA(models.Model):
         abstract = True
 
 
-class Attachment(models.Model):
+class Attachment(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     ddia_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='attachments')
     object_id = models.PositiveBigIntegerField()
     ddia_object = GenericForeignKey('ddia_type', 'object_id')
     # pathname = models.FilePathField()
     file = models.FileField()
 
-class NationalInformerAction(models.Model):
+class NationalInformerAction(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     national_agent = models.ForeignKey(NationalAgent, on_delete=models.CASCADE, related_name='national_inf_actions')
     ddia_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveBigIntegerField()
@@ -150,7 +171,9 @@ class NationalInformerAction(models.Model):
         unique_together   = ('ddia_type', 'object_id', 'new_state')
         ordering = ['date_time']
 
-class LocalInformerAction(models.Model):
+class LocalInformerAction(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     local_agent = models.ForeignKey(LocalAgent, on_delete=models.CASCADE, related_name='local_inf_actions')
     ddia_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveBigIntegerField()
@@ -163,7 +186,9 @@ class LocalInformerAction(models.Model):
         unique_together   = ('ddia_type', 'object_id', 'prev_state') 
         ordering = ['date_time']
 
-class SourceStructureAction(models.Model):
+class SourceStructureAction(SafeDeleteModel):
+    _safedelete_policy = HARD_DELETE_NOCASCADE
+
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='actionsonddia')
     ddia_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveBigIntegerField()

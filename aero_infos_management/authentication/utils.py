@@ -10,29 +10,24 @@ import pyotp
 from django.core.mail import EmailMessage
 from django.contrib.auth import get_user_model
 from django.conf import settings
-import datetime
+from datetime import datetime, timezone, timedelta
 import django
 django.setup()
-
-
 
 User = get_user_model()
 
 email_regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
 
-
 def get_random_str(n):
-
     # printing lowercase
     letters = string.ascii_lowercase + string.digits + string.ascii_uppercase
     random_str = ''.join(random.choice(letters) for i in range(n))
     return random_str
 
-
 class generateKey:
     @ staticmethod
     def returnValue():
-        return str(datetime.datetime.date(datetime.datetime.now())) + get_random_str(30)
+        return str(timezone.now()) + get_random_str(30)
 
 
 def get_key():
@@ -82,7 +77,7 @@ def send_signup_verificaion_mail(user, request):
         code = hotp.at(counter)
         print(code)
         # update code expiration
-        date_time = datetime.datetime.now() + datetime.timedelta(minutes=settings.SIGN_UP_LIMIT)
+        date_time = timezone.now() + timedelta(minutes=settings.SIGN_UP_LIMIT)
         confirm_token = ConfirmToken(
             user=user,
             kind=SIGNUP_TOKEN,
@@ -121,7 +116,7 @@ def send_password_reset_mail(user, request):
         code = hotp.at(counter)
 
         # update code expiration
-        date_time = datetime.datetime.now() + datetime.timedelta(minutes=settings.SIGN_UP_LIMIT)
+        date_time = timezone.now() + timedelta(minutes=settings.SIGN_UP_LIMIT)
         confirm_token = ConfirmToken(
             user=user,
             kind=PASSWORD_TOKEN,
@@ -161,7 +156,7 @@ def send_change_email_code(user, email):
         code = hotp.at(counter)
 
         # update code expiration
-        date_time = datetime.datetime.now() + datetime.timedelta(minutes=settings.SIGN_UP_LIMIT)
+        date_time = timezone.now() + timedelta(minutes=settings.SIGN_UP_LIMIT)
         confirm_token = ConfirmToken(
             user=user,
             kind=EMAIL_TOKEN,

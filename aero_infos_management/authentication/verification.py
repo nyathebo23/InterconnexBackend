@@ -128,7 +128,8 @@ class SignUpViewset(viewsets.ViewSet):
         user = User.objects.get(email=email)
         send_signup_verificaion_mail(user=user, request=request)
         return Response({
-            "message": "Code resent succssfully!. Please check your email"
+            "user_id": user.id,
+            "message": "Code resent successfully!. Please check your email"
         }, status=status.HTTP_200_OK)
 
 
@@ -278,7 +279,7 @@ class PasswordResetViewset(viewsets.ViewSet):
         user = User.objects.get(email=email)
         send_password_reset_mail(user=user, request=request)
         return Response({
-            "message": "Code resent succssfully!. Please check your email"
+            "message": "Code resent successfully!. Please check your email"
         }, status=status.HTTP_200_OK)
 
 
@@ -329,6 +330,7 @@ class ChangeEmailViewset(viewsets.ViewSet):
 
             send_change_email_code(user=user, email=new_email)
             return Response({
+                "user_id": user_id,
                 "message": "Code sent successfully!. Please check your email"
             }, status=status.HTTP_200_OK)
 

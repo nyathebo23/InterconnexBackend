@@ -94,9 +94,9 @@ class SignUp(APIView):
                         username=validated_data['username'],
                     )
                     user.set_password(validated_data['password'])
+                    user.is_active = False
                     user.save()
 
-                    user = registered_user(data=validated_data)
                     send_signup_verificaion_mail(user=user, request=request)
                     return response.Response(
                         {"message": "Please confirm your email address to complete the registration",

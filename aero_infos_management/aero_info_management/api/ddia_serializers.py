@@ -13,14 +13,20 @@ from .serializers import *
 from .agents_serializers import DDIAHistorySerializer, RequestReferralSerializer
 import pytz
 from django.db import transaction
+from datetime import timedelta
+from .pusher_utils_actions import notif_test
+import arrow
 
 utc=pytz.UTC
 notam_type = ContentType.objects.get_for_model(DemandeNOTAM)
 suppaip_type = ContentType.objects.get_for_model(DemandeSUPP)
 aic_type = ContentType.objects.get_for_model(DemandeAIC)
 
+def notiftest():
+    notif_test()
+
 def make_identddia_property(aerodrome: Aerodrome, prefix: str):
-    today = datetime.now()
+    today = timezone.now()
     locationInd = aerodrome.location_ind
     inc = 0
     histor = None
@@ -76,6 +82,12 @@ class DemandeNOTAMForCreateUpdateSerializer(serializers.ModelSerializer):
             aerodrome = unit.aerodrome
         attachs = validated_data.pop("attachments", [])
         identnotam = make_identddia_property(aerodrome, 'NOT')
+        date = timezone.now() + timedelta(seconds=20)
+        # schedule = Schedule.objects.create(
+        #     func='aero_info_management.api.ddia_serializers.notiftest',
+        #     schedule_type='H',
+        #     next_run = date
+        # )
         with transaction.atomic():
             demandeNOTAM = DemandeNOTAM.objects.create(**validated_data, ident_ddia=identnotam, initiator=user, 
             unit=unit, location_indicator=aerodrome.location_ind)
@@ -199,6 +211,7 @@ class DemandeSUPPForCreateUpdateSerializer(serializers.ModelSerializer):
     def validate_end_val_period(self, value):
         start_val_period = datetime.strptime(self.initial_data['start_val_period'], "%Y-%m-%dT%H:%M:%S.%fz")
         if start_val_period.replace(tzinfo=utc) >= value.replace(tzinfo=utc):
+            # print(start_val_period.replace(tzinfo=utc), value.replace(tzinfo=utc))
             raise serializers.ValidationError("this date cannot be earlier than the start period date") 
         return value
 
