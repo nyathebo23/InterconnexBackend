@@ -12,8 +12,6 @@ import pytz
 
 utc=pytz.UTC
 
-
-
 class LocalAgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = LocalAgent

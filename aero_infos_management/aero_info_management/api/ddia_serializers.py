@@ -14,16 +14,12 @@ from .agents_serializers import DDIAHistorySerializer, RequestReferralSerializer
 import pytz
 from django.db import transaction
 from datetime import timedelta
-from .pusher_utils_actions import notif_test
 import arrow
 
 utc=pytz.UTC
 notam_type = ContentType.objects.get_for_model(DemandeNOTAM)
 suppaip_type = ContentType.objects.get_for_model(DemandeSUPP)
 aic_type = ContentType.objects.get_for_model(DemandeAIC)
-
-def notiftest():
-    notif_test()
 
 def make_identddia_property(aerodrome: Aerodrome, prefix: str):
     today = timezone.now()

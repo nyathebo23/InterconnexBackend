@@ -16,15 +16,53 @@ from .ddia_serializers import *
 from ..constants import *
 from django.db.models import Q
 from django.utils import timezone
-from ..pdf_generator import *
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from django_apscheduler.jobstores import DjangoJobStore
-from ..pdf_generator import generate
 from django.core.mail import EmailMessage
 from django.conf import settings
+import pdfkit as pdf
+import jinja2 
+from xhtml2pdf import pisa
+import os
+from pathlib import Path
 
-def send_mail_to_publisher(mail: str):
+BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+module_dir = os.path.dirname(__file__)  
+print(module_dir)
+templateLoader = jinja2.FileSystemLoader(searchpath=os.path.join(BASE_DIR, 'aero_infos_management/aero_info_management/templates'))
+templateEnv = jinja2.Environment(loader=templateLoader)
+TEMPLATE_FILE1 = "notam.html"
+TEMPLATE_FILE2 = "supp_aip.html"
+TEMPLATE_FILE3 = "aic.html"
+template1 = templateEnv.get_template(TEMPLATE_FILE1)
+template2 = templateEnv.get_template(TEMPLATE_FILE2)
+template3 = templateEnv.get_template(TEMPLATE_FILE3)
+# This data can come from database query
+
+def generate(ddia, type_ddia):
+    # data.pop('attachments')
+    # data.pop('history')
+    # data.pop('request_referrals')
+    resultFile = open(module_dir + '/files/ddia.pdf', "w+b")
+    if type_ddia == 'demandenotam':
+        data = DemandeNOTAMSerializer(ddia).data
+        data['initiator_infos'] = data.get('history')[0].get('agent_object').get('user')
+        sourceHtml = template1.render(json_data=data) 
+    elif type_ddia == 'demandesupp':
+        data = DemandeSUPPSerializer(ddia).data
+        data['initiator_infos'] = data.get('history')[0].get('agent_object').get('user')
+        sourceHtml = template2.render(json_data=data) 
+    elif type_ddia == 'demandeaic':
+        data = DemandeAICSerializer(ddia).data
+        data['initiator_infos'] = data.get('history')[0].get('agent_object').get('user')
+        sourceHtml = template3.render(json_data=data) 
+    result =  pisa.CreatePDF(src=sourceHtml, dest=resultFile)
+    resultFile.close() 
+    return result
+
+
+def send_mail_to_publisher(mail: str, pdf):
     try:
         mail_subject = 'DEMANDE DE PUBLICATION'
 
@@ -34,7 +72,7 @@ def send_mail_to_publisher(mail: str):
         )
         # set type to html
         email.content_subtype = "html"
-        email.attach_file('./files/ddia.pdf')
+        email.attach(content=pdf)
         email.send()
     except:
         print('could not send mail')
@@ -63,31 +101,23 @@ class DDIAGenericViewSet(viewsets.ModelViewSet):
         return response.Response(resp, status=status.HTTP_403_FORBIDDEN) 
 
 class DDIAControl:
-    def submit_control(self, ddia, agent, data, typeDDIA, islocalinf: bool, request):
+    def submit_control(self, ddia, agent, data, islocalinf: bool):
         next_state = PENDING_VERIFICATION_STATE
         if agent.user.role == SOURCE_VERIFIER:
             next_state = PENDING_ADMISSION_STATE
         ddia.state = next_state
         ddia.save()
-        unit = ddia.unit
-        aerodrome = unit.aerodrome
         if islocalinf:
             nationalinf = NationalInformer.objects.get(id=data['nationalinf_id'])
             action = LocalInformerAction.objects.create(local_agent=agent, prev_state=DRAFT_STATE, new_state=next_state, 
             ddia_object=ddia, target_nationalinf=nationalinf)
-            notify_sourcestructure_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
-            # notify_sourceverifier_after_action(next_state, ddia, aerodrome, typeDDIA)
         else:
             action = SourceStructureAction.objects.create(agent=agent, prev_state=DRAFT_STATE, new_state=next_state, ddia_object=ddia)
-            if next_state == PENDING_ADMISSION_STATE:
-                notify_sourcestructure_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
-            elif next_state == PENDING_VERIFICATION_STATE:
-                notify_sourceverifier_ddia_submission(action, typeDDIA, aerodrome, ddia.ident_ddia, request)
-        notify_sourceunit_after_action(next_state, ddia.ident_ddia, ddia.unit, typeDDIA)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=DRAFT_STATE, new_value=next_state, field='state') 
+        return action
 
-    def cancel_ddia(self, ddia, agent, typeDDIA, islocalinf: bool):
+    def cancel_ddia(self, ddia, agent, islocalinf: bool):
         prevstate = ddia.state
         ddia.state = CANCELLED_STATE
         ddia.save()
@@ -95,7 +125,6 @@ class DDIAControl:
             action = LocalInformerAction.objects.create(local_agent=agent, prev_state=prevstate, new_state=CANCELLED_STATE, ddia_object=ddia)
         else:
             action = SourceStructureAction.objects.create(agent=agent, prev_state=prevstate, new_state=CANCELLED_STATE, ddia_object=ddia)    
-        notify_sourceunit_after_action(CANCELLED_STATE, ddia.ident_ddia, ddia.unit, typeDDIA)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=prevstate, new_value=CANCELLED_STATE, field='state')
         return action
@@ -167,10 +196,10 @@ class DDIAControl:
         ddia.state = PUBLISHED_STATE
         ddia.publication_code = data['publication_code']
         ddia.save()
-        if isinstance(agent, LocalAgent):
-            action = LocalInformerAction.objects.create(local_agent=agent, prev_state=PENDING_PUBLICATION_STATE, new_state=PUBLISHED_STATE, ddia_object=ddia)
-        elif isinstance(agent, NationalAgent):
-            action = NationalInformerAction.objects.create(national_agent=agent, new_state=PUBLISHED_STATE, ddia_object=ddia)
+        # if isinstance(agent, LocalAgent):
+        #     action = LocalInformerAction.objects.create(local_agent=agent, prev_state=PENDING_PUBLICATION_STATE, new_state=PUBLISHED_STATE, ddia_object=ddia)
+        # elif isinstance(agent, NationalAgent):
+        #     action = NationalInformerAction.objects.create(national_agent=agent, new_state=PUBLISHED_STATE, ddia_object=ddia)
         hist = DDIAHistory.objects.create(agent_object=agent, type_action=CONTROLE_ACTION, ddia_object=ddia)
         DDIAModifHistory.objects.create(history=hist, prev_value=PENDING_PUBLICATION_STATE, new_value=PUBLISHED_STATE, field='state')   
         return action
@@ -188,8 +217,11 @@ class DemandeAICViewSet(DDIAGenericViewSet):
 
     def perform_create(self, serializer):
         demandeAIC: DemandeAIC = serializer.save()
-        notify_sourceunit_ddia_creation(demandeAIC, 'demandeaic', self.request)
-        return demandeAIC
+        try:
+            notify_sourceunit_ddia_creation(demandeAIC, 'demandeaic', self.request)
+            return demandeAIC
+        except:
+            return demandeAIC
 
 class DemandeNOTAMViewSet(DDIAGenericViewSet):
     parser_classes = [MultiPartParser]
@@ -203,8 +235,11 @@ class DemandeNOTAMViewSet(DDIAGenericViewSet):
 
     def perform_create(self, serializer):
         demandeNOTAM: DemandeNOTAM = serializer.save()
-        # notify_sourceunit_ddia_creation(demandeNOTAM, 'demandenotam', self.request)        
-        return demandeNOTAM
+        try:
+            notify_sourceunit_ddia_creation(demandeNOTAM, 'demandenotam', self.request)  
+            return demandeNOTAM
+        except:
+            return demandeNOTAM
 
 class DemandeSUPPViewSet(DDIAGenericViewSet):
     parser_classes = [MultiPartParser]
@@ -218,8 +253,11 @@ class DemandeSUPPViewSet(DDIAGenericViewSet):
 
     def perform_create(self, serializer):
         demandeSUPP: DemandeSUPP = serializer.save()
-        notify_sourceunit_ddia_creation(demandeSUPP, 'demandesupp', self.request)        
-        return demandeSUPP
+        try:
+            notify_sourceunit_ddia_creation(demandeSUPP, 'demandesupp', self.request)   
+            return demandeSUPP
+        except:     
+            return demandeSUPP
 
 
 class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
@@ -245,7 +283,6 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         type_ddia = self.kwargs.get('type_ddia')
         DDIAType = ContentType.objects.get(app_label='aero_info_management', model=type_ddia)
         ddia = DDIAType.get_object_for_this_type(id=pk)
-        date = timezone.now() + timedelta(seconds=3630)
         ddia.deposit_datetime = timezone.now() 
         self.check_object_permissions(request, ddia)
         agent, isLocalInf = Agent.objects.filter(user=user).first(), False 
@@ -253,9 +290,17 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
             if agent is None:  
                 agent, isLocalInf = LocalAgent.objects.get(user=user), True
             with transaction.atomic():
-                self.submit_control(ddia, agent, data, type_ddia, isLocalInf, request)
+                action = self.submit_control(ddia, agent, data, isLocalInf)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            if action.new_state == PENDING_ADMISSION_STATE:
+                notify_sourcestructure_ddia_submission(action, type_ddia, ddia.unit.aerodrome, ddia.ident_ddia, request)
+            elif action.new_state == PENDING_VERIFICATION_STATE:
+                notify_sourceverifier_ddia_submission(action, type_ddia, ddia.unit.aerodrome, ddia.ident_ddia, request)
+        except Exception as e:
+            print(e)
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsOwner])
@@ -272,9 +317,13 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
             if agent is None:  
                 agent, isLocalInf = LocalAgent.objects.get(user=user), True
             with transaction.atomic():
-                self.cancel_ddia(ddia, agent, type_ddia, isLocalInf)
+                self.cancel_ddia(ddia, agent, isLocalInf)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            notify_sourceunit_after_action(CANCELLED_STATE, ddia.ident_ddia, ddia.unit, type_ddia)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)           
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
 
@@ -298,11 +347,15 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
                 else:
                     agent = Agent.objects.get(user=user)  
                     action = self.verify_control(ddia, agent, data)
-                if action.new_state == PENDING_ADMISSION_STATE:
-                    notify_sourcestructure_ddia_verification(action, type_ddia, aerodrome, ddia.ident_ddia, request)
-                notify_sourceverifier_after_action(action.new_state, ddia, aerodrome, type_ddia)
         except Exception as e:
-            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return response.Response('Exception: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            if action.new_state == PENDING_ADMISSION_STATE:
+                notify_sourcestructure_ddia_verification(action, type_ddia, aerodrome, ddia.ident_ddia, request)
+            elif action.new_state == NON_CONFORMING_STATE:
+                notify_ddia_reject(ddia, type_ddia, request)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
      
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsSourceCommander])
@@ -317,20 +370,23 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         ddia = DDIAType.get_object_for_this_type(id=pk) 
         self.check_object_permissions(request, ddia)
         agent = Agent.objects.select_related('aerodrome').get(user=user) 
-        aerodrome = agent.aerodrome  
         try:
             with transaction.atomic():
                 action = self.admit_control(ddia, agent, from_localinf, data)
-                if action.new_state == PENDING_APPROVAL_STATE:
-                    localinf_action = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.id, new_state=PENDING_ADMISSION_STATE).last()
-                    nationalinf = localinf_action.target_nationalinf
-                    notify_nationalinf_ddia_sourcecommand_admission(action, type_ddia, nationalinf, ddia.ident_ddia, request)
-                elif action.new_state == PENDING_VALIDATION_STATE:
-                    localinf = LocalInformer.objects.filter(aerodrome=None).first()
-                    notify_localinf_ddia_sourcecommand_admission(action, type_ddia, localinf, ddia.ident_ddia, request)
-                notify_sourcecommand_after_action(action.new_state, ddia, aerodrome, type_ddia)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            if action.new_state == PENDING_APPROVAL_STATE:
+                localinf_action = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.id, new_state=PENDING_ADMISSION_STATE).last()
+                nationalinf = localinf_action.target_nationalinf
+                notify_nationalinf_ddia_sourcecommand_admission(action, type_ddia, nationalinf, ddia.ident_ddia, request)
+            elif action.new_state == PENDING_VALIDATION_STATE:
+                localinf = LocalInformer.objects.filter(aerodrome=None).first()
+                notify_localinf_ddia_sourcecommand_admission(action, type_ddia, localinf, ddia.ident_ddia, request)
+            elif action.new_state == NOT_ADMITTED_STATE:
+                notify_ddia_reject(ddia, type_ddia, request)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsAuthorityLocalInformer])
@@ -344,17 +400,18 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         ddia = DDIAType.get_object_for_this_type(id=pk)         
         self.check_object_permissions(request, ddia)
         agent = LocalAgent.objects.select_related('localinformer').get(user=user)
-        localinf = agent.localinformer
         try:
             with transaction.atomic():
                 action = self.validate_control(ddia, agent, data)
-                if action.new_state == PENDING_APPROVAL_STATE:
-                    notify_nationalinf_ddia_localinf_validation(action, type_ddia, ddia.ident_ddia, request)
-                else:
-                    pass
-                notify_localinformer_after_action(action.new_state, ddia, localinf, type_ddia)
         except Exception as e:
             return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        try:
+            if action.new_state == PENDING_APPROVAL_STATE:
+                notify_nationalinf_ddia_localinf_validation(action, type_ddia, ddia.ident_ddia, request)
+            elif action.new_state == NOT_VALIDATED_STATE:
+                notify_ddia_reject(ddia, type_ddia, request)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)  
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)
 
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated, IsNationalInformer])
@@ -372,24 +429,30 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         try:
             with transaction.atomic(): 
                 action = self.approve_control(ddia, agent, data)
-                if action.new_state == PENDING_PUBLICATION_STATE:
-                    if not nationalinf.is_authority:
-                        notify_nationalinf_ddia_nationalinf_approbation(action, type_ddia, ddia.ident_ddia, request)
-                    else:
-                        is_generated = generate(ddia, type_ddia)
-                        if is_generated:
-                            send_mail_to_publisher('franckhebo@gmail.com')
-                    action_validate = LocalInformerAction.objects.select_related('local_agent__localinformer').filter(
-                        object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-                    args_func = [ddia, type_ddia, nationalinf]
-                    if action_validate:
-                        args_func.append(action_validate.local_agent.localinformer)
-                    datenotif = action.date_time + timedelta(days=2)
-
-                notify_nationalinformer_after_action(action.new_state, ddia, nationalinf, type_ddia)
+                file = generate(ddia, type_ddia)
+                print(file)
+                    # else:
+                    #     pass
+                    #     # is_generated = generate(ddia, type_ddia)
+                    #     # if is_generated:
+                    #     #     send_mail_to_publisher('franckhebo@gmail.com')
+                    # action_validate = LocalInformerAction.objects.select_related('local_agent__localinformer').filter(
+                    #     object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+                    # args_func = [ddia, type_ddia, nationalinf]
+                    # if action_validate:
+                    #     args_func.append(action_validate.local_agent.localinformer)
+                    # datenotif = action.date_time + timedelta(days=2)
 
         except Exception as e:
-            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+            print(e)
+            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        try:
+            if action.new_state == PENDING_PUBLICATION_STATE and not nationalinf.is_authority:
+                notify_nationalinf_ddia_nationalinf_approbation(action, type_ddia, ddia.ident_ddia, request) 
+            elif action.new_state == NOT_APPROVED_STATE:
+                notify_ddia_reject(ddia, type_ddia, request)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)     
 
     @action(methods=['post'], detail=True, permission_classes=[IsAuthenticated])
@@ -403,47 +466,25 @@ class DDIAControlViewset(viewsets.ViewSet, DDIAControl):
         agent = LocalAgent.objects.select_related('localinformer').filter(user=user).first()  
         if agent is None:
             agent = NationalAgent.objects.select_related('nationalinformer').get(user=user)
-        self.published_control(ddia, agent, data)
-        action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-        if action_validate is not None:
-            nationalinf = action_validate.target_nationalinf 
-            notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
-        if type_ddia == 'demandenotam' and ddia.type_notam != NOTAMC:
-            period_type = ddia.validity_period_type
-            nbdays_before = 5
-            datenotif = ddia.end_val_period - timedelta(days=nbdays_before)
-            notify_unit_at_date_for_notam.apply_async((pk,), eta=datenotif)
-        elif type_ddia == 'demandesupp':
-            nbdays_before = 5
-            datenotif = ddia.end_val_period - timedelta(days=nbdays_before) 
-            notify_unit_at_date_for_suppaip.apply_async((pk,), eta=datenotif)
-
-        # try:
-        #     with transaction.atomic(): 
-        #         self.published_control(ddia, agent, data)
-        #         action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
-        #         if action_validate is not None:
-        #             nationalinf = action_validate.target_nationalinf 
-        #             notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
-        #         if type_ddia == 'demandenotam' and ddia.type_notam != NOTAMC:
-        #             period_type = ddia.validity_period_type
-        #             nbdays_before = 5
-        #             datenotif = ddia.end_val_period - timedelta(days=nbdays_before)
-        #             # schedule(
-        #             #     'aero_info_management.api.pusher_utils_actions.notify_unit_at_date_for_notam', args=[ddia], schedule_type='D', next_run = datenotif, repeats = 2
-        #             # )
-        #             scheduler.add_job(notify_unit_at_date_for_notam, args=[ddia], next_run_time=datenotif)
-        #             scheduler.start()
-        #         elif type_ddia == 'demandesupp':
-        #             nbdays_before = 5
-        #             datenotif = ddia.end_val_period - timedelta(days=nbdays_before) 
-        #             # schedule(
-        #             #     'aero_info_management.api.pusher_utils_actions.notify_unit_at_date_for_suppaip', args=[ddia], schedule_type='D', next_run = datenotif, repeats = 2
-        #             # )
-        #             scheduler.add_job(notify_unit_at_date_for_suppaip, args=[ddia], next_run_time=datenotif)
-        #             scheduler.start()
-
-        # except Exception as e:
-        #     return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
- 
+        try:
+            with transaction.atomic(): 
+                self.published_control(ddia, agent, data)
+            if type_ddia == 'demandenotam' and ddia.type_notam != NOTAMC:
+                period_type = ddia.validity_period_type
+                nbdays_before = 5
+                datenotif = ddia.end_val_period - timedelta(days=nbdays_before)
+                notify_unit_at_date_for_notam.apply_async((pk,), eta=datenotif)
+            elif type_ddia == 'demandesupp':
+                nbdays_before = 5
+                datenotif = ddia.end_val_period - timedelta(days=nbdays_before) 
+                notify_unit_at_date_for_suppaip.apply_async((pk,), eta=datenotif)
+        except Exception as e:
+            return response.Response('Excepion: {}'.format(e), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+        try:
+            action_validate = LocalInformerAction.objects.select_related('target_nationalinf').filter(object_id=ddia.pk, new_state=PENDING_APPROVAL_STATE).first()
+            if action_validate is not None:
+                nationalinf = action_validate.target_nationalinf 
+                notify_nationalinformer_after_action(PUBLISHED_STATE, ddia, nationalinf, type_ddia)
+        except:
+            return response.Response({'message': 'send notification error'}, status=status.HTTP_200_OK)
         return response.Response({'message': 'Ok'}, status=status.HTTP_200_OK)   

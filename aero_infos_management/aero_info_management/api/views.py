@@ -239,20 +239,20 @@ def listDDIA_processed_for_nationalinf_view(request, type_ddia):
     nationalinf = national_agent.nationalinformer
     approbations = []
     if type_ddia == 'notam':
-        approbations = NationalInformerAction.objects.filter(ddia_type=notam_type, prev_state=PENDING_APPROVAL_STATE)
+        approbations = NationalInformerAction.objects.filter(ddia_type=notam_type)
         approbations = approbations if state == 'all' else approbations.filter(notam__state=state) 
     elif type_ddia == 'suppaip':
-        approbations = NationalInformerAction.objects.filter(ddia_type=suppaip_type, prev_state=PENDING_APPROVAL_STATE)
+        approbations = NationalInformerAction.objects.filter(ddia_type=suppaip_type)
         approbations = approbations if state == 'all' else approbations.filter(suppaip__state=state) 
     elif type_ddia == 'aic':
-        approbations = NationalInformerAction.objects.filter(ddia_type=aic_type, prev_state=PENDING_APPROVAL_STATE)
+        approbations = NationalInformerAction.objects.filter(ddia_type=aic_type)
         approbations = approbations if state == 'all' else approbations.filter(aic__state=state) 
     else:
         approbations = NationalInformerAction.objects.all()
         if not nationalinf.is_authority:
             approbations = approbations.filter(national_agent__nationalinformer=nationalinf)
     approbations = approbations if state == 'all' else approbations.filter(
-       Q(notam__state=state) | Q(suppaip__state=state) | Q(aic__state=state), prev_state=PENDING_APPROVAL_STATE
+       Q(notam__state=state) | Q(suppaip__state=state) | Q(aic__state=state)
     ) 
     approbations = approbations if date_order == 'ascendingDate' else list(reversed(approbations))
     return render_pagination_nationalinf_response(approbations, request)
