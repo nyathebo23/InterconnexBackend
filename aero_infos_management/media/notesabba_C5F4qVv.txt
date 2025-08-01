@@ -1,0 +1,6 @@
+Circulaire59  : dérit le process de demande des infos aéronautiques
+NOTAM (Notice To Airmen) sont publiés à l'attention des pilotes
+AIC (Circulaire d'Information Aéronautique) Information à caractère générale dans l'aviation civile, ne concernant pas spécialement le pilote
+
+
+A faire : Evaluation de la charge de l'application pour proposer des capacités de serveur à utiliser
